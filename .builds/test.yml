@@ -1,23 +1,31 @@
-image: freebsd/latest
-packages:
-  - go
-sources:
-  - https://git.sr.ht/~samwhited/xmpp
-environment:
-  GO111MODULE: "on"
-tasks:
-  - setup: |
-      go version
-      go env
-
-      echo 'export PATH=$(go env GOPATH)/bin:$PATH' >> ~/.buildenv
-  - stable: |
-      cd xmpp/
-      go test -v -cover ./...
-  - examples: |
-      cd xmpp/examples/
+pipeline:
+  info: &info
+    image: golang:${GO_VERSION}-alpine
+    environment:
+      GO111MODULE: "on"
+      CGO_ENABLED: "0"
+    commands:
+      - go version
+      - go env
+  test:
+    << : *info
+    commands: go test -v -cover ./...
+  examples:
+    << : *info
+    commands: |
+      cd examples/
       for d in ./*/; do
-        pushd $d
+        cd $d
         go build
-        popd
+        cd ..
       done
+    when:
+      path: "examples/**"
+
+matrix:
+  GO_VERSION:
+    - 1.17
+    - 1.16
+
+depends_on:
+  - dco
