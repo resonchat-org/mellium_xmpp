@@ -2,6 +2,8 @@ pipeline:
   info: &info
     image: golang:alpine
     environment:
+      PROSODY_USER: "prosody"
+      PROSODY_GROUP: "prosody"
       GO111MODULE: "on"
       CGO_ENABLED: "0"
     commands:
