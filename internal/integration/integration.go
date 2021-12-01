@@ -81,8 +81,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -485,6 +488,74 @@ func User(user jid.JID, pass string) Option {
 	return func(cmd *Cmd) error {
 		cmd.user = user
 		cmd.pass = pass
+		return nil
+	}
+}
+
+// lookupUser is like user.Lookup except it first looks up by a username, then
+// falls back to an ID if the username does not exist.
+func lookupUser(u string) (*user.User, error) {
+	uu, err := user.Lookup(u)
+	if err == nil {
+		return uu, err
+	}
+	return user.LookupId(u)
+}
+
+// lookupGroup is like user.LookupGroup except it first tries to look up by name
+// then by gid.
+func lookupGroup(g string) (*user.Group, error) {
+	gg, err := user.LookupGroup(g)
+	if err == nil {
+		return gg, err
+	}
+	return user.LookupGroupId(g)
+}
+
+func creds(prosodyUser, prosodyGroup string) (*syscall.Credential, error) {
+	var uid, gid int
+	if prosodyUser != "" {
+		u, err := lookupUser(prosodyUser)
+		if err != nil {
+			return nil, err
+		}
+		uid, err = strconv.Atoi(u.Uid)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if prosodyGroup != "" {
+		g, err := lookupGroup(prosodyGroup)
+		if err != nil {
+			return nil, err
+		}
+		gid, err = strconv.Atoi(g.Gid)
+		if err != nil {
+			return nil, err
+		}
+	}
+	c := &syscall.Credential{}
+	if uid != 0 {
+		c.Uid = uint32(uid)
+	}
+	if gid != 0 {
+		c.Gid = uint32(gid)
+	}
+	return c, nil
+}
+
+// ExecAs sets a username and group to be used when executing the command.
+// A name or ID may be passed.
+func ExecAs(u, g string) Option {
+	return func(cmd *Cmd) error {
+		c, err := creds(u, g)
+		if err != nil {
+			return err
+		}
+		if cmd.Cmd.SysProcAttr == nil {
+			cmd.Cmd.SysProcAttr = &syscall.SysProcAttr{}
+		}
+		cmd.SysProcAttr.Credential = c
 		return nil
 	}
 }
