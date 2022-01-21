@@ -7,6 +7,16 @@
 // found in the file "LICENSE.modules".
 
 // Package prosody facilitates integration testing against Prosody.
+//
+// This package reads two environment variables:
+//
+//     PROSODY_USER
+//     PROSODY_GROUP
+//
+// If set, these will be used to run the prosody and prosodyctl processes as the
+// provider user or group.
+// They may be overridden for specific tests by passing your own
+// integration.ExecAs option.
 package prosody // import "mellium.im/xmpp/internal/integration/prosody"
 
 import (
@@ -14,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -26,6 +37,8 @@ const (
 	cfgFileName = "prosody.cfg.lua"
 	cmdName     = "prosody"
 	configFlag  = "--config"
+	envUser     = "PROSODY_USER"
+	envGroup    = "PROSODY_GROUP"
 )
 
 // New creates a new, unstarted, prosody daemon.
@@ -33,6 +46,7 @@ const (
 // The provided context is used to kill the process (by calling os.Process.Kill)
 // if the context becomes done before the command completes on its own.
 func New(ctx context.Context, opts ...integration.Option) (*integration.Cmd, error) {
+	opts = append([]integration.Option{integration.ExecAs(os.Getenv(envUser), os.Getenv(envGroup))}, opts...)
 	return integration.New(
 		ctx, cmdName,
 		opts...,
@@ -89,6 +103,8 @@ func ctlFunc(ctx context.Context, args ...string) func(*integration.Cmd) error {
 		cfgFilePath := filepath.Join(cmd.ConfigDir(), cfgFileName)
 		/* #nosec */
 		prosodyCtl := exec.CommandContext(ctx, "prosodyctl", configFlag, cfgFilePath)
+		// Use the same user and group (among other things) as the prosody command.
+		prosodyCtl.SysProcAttr = cmd.Cmd.SysProcAttr
 		prosodyCtl.Args = append(prosodyCtl.Args, args...)
 		return prosodyCtl.Run()
 	}
@@ -104,7 +120,7 @@ func getConfig(cmd *integration.Cmd) Config {
 // ListenC2S listens for client-to-server (c2s) connections on a random port.
 func ListenC2S() integration.Option {
 	return func(cmd *integration.Cmd) error {
-		c2sListener, err := cmd.C2SListen("tcp", ":0")
+		c2sListener, err := cmd.C2SListen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return err
 		}
@@ -131,7 +147,7 @@ func ListenC2S() integration.Option {
 // ListenS2S listens for server-to-server (s2s) connections on a random port.
 func ListenS2S() integration.Option {
 	return func(cmd *integration.Cmd) error {
-		s2sListener, err := cmd.S2SListen("tcp", "[::1]:0")
+		s2sListener, err := cmd.S2SListen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return err
 		}
@@ -180,7 +196,7 @@ func Component(domain, secret, name string, modules ...string) integration.Optio
 	return func(cmd *integration.Cmd) error {
 		cfg := getConfig(cmd)
 		if name == "" {
-			compListener, err := cmd.ComponentListen("tcp", "[::1]:0")
+			compListener, err := cmd.ComponentListen("tcp4", "127.0.0.1:0")
 			if err != nil {
 				return err
 			}
@@ -221,11 +237,11 @@ func Component(domain, secret, name string, modules ...string) integration.Optio
 // ports and configures TLS certificates for localhost:https.
 func HTTPS() integration.Option {
 	return func(cmd *integration.Cmd) error {
-		httpsListener, err := cmd.HTTPSListen("tcp", "[::1]:0")
+		httpsListener, err := cmd.HTTPSListen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return err
 		}
-		httpListener, err := cmd.HTTPListen("tcp", "[::1]:0")
+		httpListener, err := cmd.HTTPListen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return err
 		}
@@ -343,6 +359,7 @@ func defaultConfig(cmd *integration.Cmd) error {
 // subtests.
 // When all subtests have completed, the daemon is stopped.
 func Test(ctx context.Context, t *testing.T, opts ...integration.Option) integration.SubtestRunner {
+	opts = append([]integration.Option{integration.ExecAs(os.Getenv(envUser), os.Getenv(envGroup))}, opts...)
 	opts = append(opts, defaultConfig,
 		integration.Shutdown(ctlFunc(ctx, "stop")))
 	return integration.Test(ctx, cmdName, t, opts...)

@@ -1,26 +1,31 @@
-image: archlinux
-packages:
-  # Temporarily disabled due to a bug.
-  # See: https://mellium.im/issue/68
-  # - ejabberd
-  - go
-  - lua52-sec
-  # Temporarily disabled due to a bug.
-  # See: https://mellium.im/issue/222
-  # - mcabber
-  - openssl
-  - prosody
-  - python-pip
-  - sendxmpp
-sources:
-  - https://git.sr.ht/~samwhited/xmpp
-environment:
-  GO111MODULE: "on"
-tasks:
-  - setup: |
-      go version
-      go env
-      pip --no-input install --no-warn-script-location aioxmpp
-  - stable: |
-      cd xmpp/
-      go test -v -tags "integration" -run Integration ./...
+pipeline:
+  info: &info
+    image: golang:alpine
+    environment:
+      PROSODY_USER: "prosody"
+      PROSODY_GROUP: "prosody"
+      GO111MODULE: "on"
+      CGO_ENABLED: "0"
+    commands:
+      - go version
+      - go env
+  test:
+    << : *info
+    commands:
+      - |
+        cat > /etc/apk/repositories << EOF; $$(echo)
+
+        http://dl-cdn.alpinelinux.org/alpine/v$$(cat /etc/alpine-release | cut -d'.' -f1,2)/main
+        http://dl-cdn.alpinelinux.org/alpine/v$$(cat /etc/alpine-release | cut -d'.' -f1,2)/community
+        http://dl-cdn.alpinelinux.org/alpine/edge/testing
+
+        EOF
+      - apk update
+      # TODO: re-enable ejabberd and mcabber.
+      # See: https://mellium.im/issue/68, https://mellium.im/issue/222
+      - apk add lua-sec openssl prosody
+      - go test -v -tags "integration" -run Integration ./...
+
+depends_on:
+  - dco
+  - test
