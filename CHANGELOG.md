@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Breaking
+
+- styling: individual tokens no longer contains their own Style, use Decoder's
+  `Style()` method instead
+
+
 ### Added
 
 - ibb: the `Expect` method can be used to accept only pre-negotiated IBB
