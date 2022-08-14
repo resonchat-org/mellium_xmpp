@@ -290,14 +290,15 @@ func (item Item) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 
 // Set creates a new roster item or updates an existing item.
 func Set(ctx context.Context, s *xmpp.Session, item Item) error {
-	return SetIQ(ctx, s, IQ{}, item)
+	iq := IQ{}
+	iq.Query.Item = []Item{item}
+	return SetIQ(ctx, iq, s)
 }
 
 // SetIQ is like Set but it allows you to customize the IQ.
 // Changing the type of the provided IQ has no effect.
-func SetIQ(ctx context.Context, s *xmpp.Session, iq IQ, item Item) error {
+func SetIQ(ctx context.Context, iq IQ, s *xmpp.Session) error {
 	iq.Type = stanza.SetIQ
-	iq.Query.Item = append(iq.Query.Item, item)
 	resp, err := s.SendIQ(ctx, iq.TokenReader())
 	if err != nil {
 		return err
@@ -312,4 +313,14 @@ func Delete(ctx context.Context, s *xmpp.Session, j jid.JID) error {
 		Subscription: "remove",
 	}
 	return Set(ctx, s, item)
+}
+
+// DeleteIQ is like Delete but it allows you to customize the IQ.
+// Changing the type of the provided IQ has no effect.
+func DeleteIQ(ctx context.Context, iq IQ, s *xmpp.Session) error {
+	for i, item := range iq.Query.Item {
+    	item.Subscription = "remove"
+    	iq.Query.Item[i] = item
+	}
+	return SetIQ(ctx, iq, s)
 }
