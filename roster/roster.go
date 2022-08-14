@@ -319,8 +319,8 @@ func Delete(ctx context.Context, s *xmpp.Session, j jid.JID) error {
 // Changing the type of the provided IQ has no effect.
 func DeleteIQ(ctx context.Context, iq IQ, s *xmpp.Session) error {
 	for i, item := range iq.Query.Item {
-    	item.Subscription = "remove"
-    	iq.Query.Item[i] = item
+		item.Subscription = "remove"
+		iq.Query.Item[i] = item
 	}
 	return SetIQ(ctx, iq, s)
 }
