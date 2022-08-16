@@ -1,13 +1,12 @@
 # TODO: re-enable sendxmpp, mcabber, etc.
-# See: https://mellium.im/issue/68, https://mellium.im/issue/222, and
-#      https://mellium.im/issue/329
+# See: https://mellium.im/issue/68, https://mellium.im/issue/222
 
 pipeline:
   info: &info
     image: alpine:edge
     environment:
       CGO_ENABLED: "0"
-      MELLIUM_INTEGRATION_SKIP: "ejabberdctl,sendxmpp,mcabber,jackal"
+      MELLIUM_INTEGRATION_SKIP: "ejabberdctl,sendxmpp,mcabber"
     commands:
       - apk update
       - apk add go python3 lua5.2
