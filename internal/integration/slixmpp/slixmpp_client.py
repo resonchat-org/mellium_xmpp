@@ -25,6 +25,11 @@ class Daemon(xmpptest.Daemon):
         self.client: slixmpp.ClientXMPP = slixmpp.ClientXMPP(
             self.jid,
             self.config.get("client", "password"),
+            # Issue:
+            #
+            # SCRAM-SHA-1-PLUS and then falling back to SCRAM-SHA-1 both fail,
+            # but SCRAM-SHA-1 as the first auth attempt succeeds.
+            sasl_mech="SCRAM-SHA-1",
         )
 
     async def run_test(self) -> None:
