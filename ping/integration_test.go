@@ -23,6 +23,7 @@ import (
 	"mellium.im/xmpp/internal/integration/ejabberd"
 	"mellium.im/xmpp/internal/integration/jackal"
 	"mellium.im/xmpp/internal/integration/mcabber"
+	"mellium.im/xmpp/internal/integration/openfire"
 	"mellium.im/xmpp/internal/integration/prosody"
 	"mellium.im/xmpp/internal/integration/python"
 	"mellium.im/xmpp/internal/integration/sendxmpp"
@@ -60,6 +61,13 @@ func TestIntegrationSendPing(t *testing.T) {
 	)
 	jackalRun(integrationSendPing)
 	jackalRun(integrationRecvPing)
+
+	openfireRun := openfire.Test(context.TODO(), t,
+		integration.Log(),
+		openfire.ListenC2S(),
+	)
+	openfireRun(integrationSendPing)
+	openfireRun(integrationRecvPing)
 }
 
 func integrationRecvPing(ctx context.Context, t *testing.T, cmd *integration.Cmd) {

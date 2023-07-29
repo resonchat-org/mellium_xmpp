@@ -8,6 +8,12 @@ steps:
     environment:
       CGO_ENABLED: "0"
       MELLIUM_INTEGRATION_SKIP: "ejabberdctl,sendxmpp,mcabber,jackal"
+      OPENFIRE_CMD: "java"
+      OPENFIRE_ARGS: >-
+        -server -Xmx256m
+        -Dopenfire.lib.dir=/var/lib/openfire/lib
+        -classpath /var/lib/openfire/lib/startup.jar
+        -jar /var/lib/openfire/lib/startup.jar
     commands:
       - apk update
       - apk add go python3 lua5.2
@@ -26,7 +32,7 @@ steps:
 
         EOF
       - apk update
-      - apk add go python3 lua5.2 py3-slixmpp py3-aioxmpp openssl prosody lua-unbound jackal
+      - apk add go python3 lua5.2 py3-slixmpp py3-aioxmpp openssl prosody lua-unbound jackal openfire
       - go test -v -tags "integration" -run Integration ./...
 depends_on:
   - dco

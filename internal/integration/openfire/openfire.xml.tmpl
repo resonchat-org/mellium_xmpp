@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jive>
+  <adminConsole>
+      <port>1</port>
+      <securePort>1</securePort>
+  </adminConsole>
+  <connectionProvider>
+    <className>org.jivesoftware.database.EmbeddedConnectionProvider</className>
+  </connectionProvider>
+  <autosetup>
+      <run>true</run>
+      <locale>en</locale>
+      {{- range .VHosts }}
+      <xmpp>
+          {{ if $.C2SPort }}<socket><plain><port>{{ $.C2SPort }}</port></plain></socket>{{ end }}
+          <auth>
+              <anonymous>true</anonymous>
+          </auth>
+          <domain>{{ . }}</domain>
+          <fqdn>{{ . }}</fqdn>
+      </xmpp>
+      {{- end }}
+      <database>
+          <mode>embedded</mode>
+      </database>
+      {{- range .Admins }}
+      <admin>
+          <email>{{ . }}</email>
+          <password>admin</password>
+      </admin>
+      {{- end }}
+      <users>
+          {{- range $i, $user := .Users }}
+          <user{{ $i }}>
+            <username>{{ $user.Username }}</username>
+            <password>{{ $user.Password}}</password>
+          </user{{ $i }}>
+          {{- end }}
+      </users>
+  </autosetup>
+</jive>
