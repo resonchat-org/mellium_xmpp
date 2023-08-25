@@ -169,12 +169,6 @@ func SeeOtherHostError(addr net.Addr) Error {
 	return Error{
 		Err:     "see-other-host",
 		Content: cdata,
-		// This needs to return the CharData every time in case we use this error
-		// multiple times, so use a custom ReaderFunc and not the stateful
-		// xmlstream.Token.
-		innerXML: xmlstream.ReaderFunc(func() (xml.Token, error) {
-			return xml.CharData(cdata), io.EOF
-		}),
 	}
 }
 
@@ -189,8 +183,7 @@ type Error struct {
 	// The content of the XML element
 	Content string
 
-	innerXML xml.TokenReader
-	payload  xml.TokenReader
+	payload xml.TokenReader
 }
 
 // Is will be used by errors.Is when comparing errors.
@@ -302,7 +295,9 @@ func (s Error) WriteXML(w xmlstream.TokenWriter) (n int, err error) {
 // TokenReader returns a new xml.TokenReader that returns an encoding of
 // the error.
 func (s Error) TokenReader() xml.TokenReader {
-	inner := xmlstream.Wrap(s.innerXML, xml.StartElement{Name: xml.Name{Local: s.Err, Space: NSError}})
+	inner := xmlstream.Wrap(xmlstream.ReaderFunc(func() (xml.Token, error) {
+		return xml.CharData(s.Content), io.EOF
+	}), xml.StartElement{Name: xml.Name{Local: s.Err, Space: NSError}})
 	if s.payload != nil {
 		inner = xmlstream.MultiReader(
 			inner,
@@ -342,17 +337,5 @@ func (s Error) TokenReader() xml.TokenReader {
 // with this method may only be marshaled once.
 func (s Error) ApplicationError(r xml.TokenReader) Error {
 	s.payload = r
-	return s
-}
-
-// InnerXML returns a copy of the Error that marshals the provided reader after
-// the error condition start token.
-// Multiple, chained, calls to InnerXML will  replace the inner XML each time
-// and only the final call will have any effect.
-//
-// Because the TokenReader will be consumed during marshalling errors created
-// with this method may only be marshaled once.
-func (s Error) InnerXML(r xml.TokenReader) Error {
-	s.innerXML = r
 	return s
 }
