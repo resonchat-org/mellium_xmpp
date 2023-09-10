@@ -5,6 +5,7 @@
 package sce_test
 
 import (
+	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
 	"reflect"
@@ -144,6 +145,117 @@ func TestUnwrap(t *testing.T) {
 			}
 			if !reflect.DeepEqual(tc.envelope, env) {
 				t.Errorf("envelopes didn't match! should: `%#v` is:`%#v`", tc.envelope, env)
+				return
+			}
+
+		})
+	}
+}
+
+var (
+	DummyKey = []byte("0123456789abcdef0123456789abcdef")
+	DummyIV  = []byte("0123456789abcdef")
+)
+
+type sceEnvelopeTestCase struct {
+	envelope sce.EncryptedEnvelope
+	XML      string
+	err      error
+	header   string
+	content  string
+}
+
+var testCasesEncrypt = [...]sceEnvelopeTestCase{
+	0: {
+		envelope: sce.EncryptedEnvelope{
+			XMLNamespace:  xml.Name{Space: "foo:bar"},
+			AuthedCrypter: sce.NewCBCHMACAuthedCrypter(DummyKey, DummyIV, DummyKey, sha256.New),
+			Header: xmlstream.Wrap(
+				xmlstream.Wrap(nil, xml.StartElement{Name: xml.Name{Local: "bar"}}),
+				xml.StartElement{Name: xml.Name{Local: "header"}},
+			),
+			Env: sce.Envelope{
+				Profile: noRpadProfile,
+				To:      testJid1.Bare(),
+				From:    testJid0.Bare(),
+				Time:    time.Date(1970, 01, 01, 12, 34, 56, 0, time.UTC),
+				Content: xmlstream.Wrap(
+					nil,
+					xml.StartElement{Name: xml.Name{Local: "foo"}},
+				),
+			},
+		},
+		err: nil,
+		XML: `<encrypted xmlns="foo:bar">` +
+			`<header><bar></bar></header>` +
+			`<payload>t0BTz+1gUAQcaiOdU0osSfIZzSwyhWm26eX6QzZb0JYv/YU` +
+			`4Rvlxp6KCoaXRzwI3fIRtyeySSYthYbqj176U3M9EJGinTLwBoQM1Q9D` +
+			`XFmP38j2kVQpE4AcFmbaLGa8jHuU49itpWufZqfbT/9KDDMcoGLi9PJt` +
+			`B46/+8ZilvntT30oyLUkeVFCDmTX6LHDxFlt7yJ4o9Z7tCOWUBg3Zkvm` +
+			`wXJo3doI1ONi+23mWKjI=` +
+			`</payload>` +
+			`</encrypted>`,
+		header:  "<bar></bar>",
+		content: "<foo></foo>",
+	},
+	1: {
+		envelope: sce.EncryptedEnvelope{
+			XMLNamespace:  xml.Name{Space: "baz:baan"},
+			AuthedCrypter: sce.NewCBCHMACAuthedCrypter(DummyKey, DummyIV, DummyKey, sha256.New),
+			Header: xmlstream.Wrap(
+				xmlstream.Wrap(nil, xml.StartElement{Name: xml.Name{Local: "bar"}}),
+				xml.StartElement{Name: xml.Name{Local: "header"}},
+			),
+			Env: sce.Envelope{
+				Profile: strictProfile,
+				To:      testJid1.Bare(),
+				From:    testJid0.Bare(),
+				Content: xmlstream.Wrap(
+					nil,
+					xml.StartElement{Name: xml.Name{Local: "foo"}},
+				),
+			},
+		},
+		err:     nil,
+		header:  "<bar></bar>",
+		content: "<foo></foo>",
+	},
+}
+
+func TestEncryptDecrypt(t *testing.T) {
+	for i, tc := range testCasesEncrypt {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			xb, err := xml.Marshal(tc.envelope)
+			if err != nil {
+				t.Errorf("xml.Marshal failed: %v", err)
+			}
+			xbs := string(xb)
+			if tc.XML != "" && xbs != tc.XML {
+				t.Errorf("XML check failed, got=%v, should=%v", xbs, tc.XML)
+				return
+			}
+			mac := make([]byte, sce.OMEMO2_MAC_LENGTH)
+			tc.envelope.AuthedCrypter.GetMAC(mac)
+
+			env := sce.XSFOMEMO2SceEnvelope{}
+			env.Envelope.AuthedCrypter = sce.NewCBCHMACAuthedCrypter(DummyKey, DummyIV, DummyKey, sha256.New)
+			env.Envelope.Env.Profile = tc.envelope.Env.Profile
+			env.Envelope.XMLNamespace = tc.envelope.XMLNamespace
+			env.Envelope.AuthedCrypter.SetMAC(mac)
+			err = xml.Unmarshal([]byte(xbs), &env)
+			if err != tc.err {
+				t.Errorf("err check failed, got=%v, should=%v", err, tc.err)
+				return
+			}
+			if env.Envelope.Header != tc.header {
+				t.Errorf("header check failed, got=%v, should=%v",
+					env.Envelope.Header, tc.header)
+				return
+			}
+			tc_env := tc.envelope.Env
+			tc_env.Content = tc.content
+			if !reflect.DeepEqual(tc_env, env.Envelope.Env) {
+				t.Errorf("envelopes didn't match! should: `%#v` is:`%#v`", tc_env, env.Envelope.Env)
 				return
 			}
 
