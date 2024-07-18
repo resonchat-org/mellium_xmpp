@@ -10,6 +10,8 @@ import (
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
+	"mellium.im/xmpp/disco/info"
+	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
 
@@ -58,4 +60,47 @@ func PublishIQ(ctx context.Context, s *xmpp.Session, iq stanza.IQ, node, id stri
 		return id, err
 	}
 	return resp.Publish.Item.ID, err
+}
+
+// Subscriptions is a handler that, when registered against a mux with Handle,
+// allows the user to subscribe and receive updates to pubsub nodes.
+type Subscriptions struct {
+	XMLName  xml.Name `xml:"http://jabber.org/protocol/pubsub pubsub"`
+	Features []info.Feature
+}
+
+// ForFeatures implements info.FeatureIter.
+func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) error {
+	if node != "" {
+		return nil
+	}
+
+	pubsubFeature := info.Feature{Var: "http://jabber.org/protocol/pubsub#subscription-options"}
+
+	var err error = f(pubsubFeature)
+
+	if err != nil {
+		return err
+	}
+
+	for _, feature := range s.Features {
+		err = f(feature)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// HandleMessage satisfies mux.MessageHandler.
+func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEncoder) error {
+	return nil
+}
+
+// Handle returns an option that registers the handler for use with a
+// multiplexer.
+func Handle(s *Subscriptions) mux.Option {
+	return nil
 }
