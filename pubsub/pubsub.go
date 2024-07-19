@@ -129,8 +129,10 @@ func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEnc
 func Handle(s *Subscriptions) mux.Option {
 	return func(m *mux.ServeMux) {
 		mux.Message(stanza.HeadlineMessage, xml.Name{Space: NSOptions}, s)(m)
+		mux.Message(stanza.NormalMessage, xml.Name{Space: NSOptions}, s)(m)
 		for namespace := range s.handlers {
 			mux.Message(stanza.HeadlineMessage, xml.Name{Space: namespace}, s)(m)
+			mux.Message(stanza.NormalMessage, xml.Name{Space: NSOptions}, s)(m)
 		}
 	}
 }
