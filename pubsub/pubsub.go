@@ -7,6 +7,7 @@ package pubsub
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
@@ -65,8 +66,12 @@ func PublishIQ(ctx context.Context, s *xmpp.Session, iq stanza.IQ, node, id stri
 // Subscriptions is a handler that, when registered against a mux with Handle,
 // allows the user to subscribe and receive updates to pubsub nodes.
 type Subscriptions struct {
-	XMLName  xml.Name `xml:"http://jabber.org/protocol/pubsub pubsub"`
-	Features []info.Feature
+	features []info.Feature
+	handlers map[string]Handler
+}
+
+type Handler interface {
+	HandleEvent(stanza.Message, Iter) error
 }
 
 // ForFeatures implements info.FeatureIter.
@@ -75,7 +80,7 @@ func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) err
 		return nil
 	}
 
-	pubsubFeature := info.Feature{Var: "http://jabber.org/protocol/pubsub#subscription-options"}
+	pubsubFeature := info.Feature{Var: NSOptions}
 
 	var err error = f(pubsubFeature)
 
@@ -83,7 +88,7 @@ func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) err
 		return err
 	}
 
-	for _, feature := range s.Features {
+	for _, feature := range s.features {
 		err = f(feature)
 
 		if err != nil {
@@ -96,7 +101,27 @@ func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) err
 
 // HandleMessage satisfies mux.MessageHandler.
 func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEncoder) error {
-	return nil
+	// Skip the initial Message token
+	_, err := r.Token()
+
+	if err != nil {
+		return err
+	}
+
+	iter := xmlstream.NewIter(r)
+	for iter.Next() {
+		start, child := iter.Current()
+		h, ok := s.handlers[start.Name.Space]
+		if !ok {
+			return fmt.Errorf("Handler for %s not registered.", start.Name.Space)
+		}
+		err = h.HandleEvent(p, Iter{current: child})
+		if err != nil {
+			return err
+		}
+	}
+
+	return iter.Err()
 }
 
 // Handle returns an option that registers the handler for use with a
