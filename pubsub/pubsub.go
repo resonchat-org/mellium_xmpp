@@ -12,6 +12,8 @@ import (
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/disco/info"
+	"mellium.im/xmpp/internal/attr"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
@@ -70,6 +72,7 @@ type Subscriptions struct {
 	handlers map[string]Handler
 }
 
+// Handler responds to pubsub events.
 type Handler interface {
 	HandleEvent(stanza.Message, Iter) error
 }
@@ -115,6 +118,7 @@ func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEnc
 		if !ok {
 			return fmt.Errorf("Handler for %s not registered.", start.Name.Space)
 		}
+
 		err = h.HandleEvent(p, Iter{current: child})
 		if err != nil {
 			return err
@@ -128,11 +132,197 @@ func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEnc
 // multiplexer.
 func Handle(s *Subscriptions) mux.Option {
 	return func(m *mux.ServeMux) {
-		mux.Message(stanza.HeadlineMessage, xml.Name{Space: NSOptions}, s)(m)
-		mux.Message(stanza.NormalMessage, xml.Name{Space: NSOptions}, s)(m)
+		// Default event namespace registration
+		mux.Message(stanza.HeadlineMessage, xml.Name{Space: NSEvent}, s)(m)
+		mux.Message(stanza.NormalMessage, xml.Name{Space: NSEvent}, s)(m)
+
+		// External Handlers Registration
 		for namespace := range s.handlers {
 			mux.Message(stanza.HeadlineMessage, xml.Name{Space: namespace}, s)(m)
-			mux.Message(stanza.NormalMessage, xml.Name{Space: NSOptions}, s)(m)
+			mux.Message(stanza.NormalMessage, xml.Name{Space: namespace}, s)(m)
 		}
 	}
+}
+
+// The HandlerFunc type is an adapter to allow the use of ordinary functions as
+// event handlers.
+// If f is a function with the appropriate signature, EventHandlerFunc(f) is a
+// Handler that calls f.
+type HandlerFunc func(stanza.Message, Iter) error
+
+// HandleEvent calls f(msg, iter).
+func (f HandlerFunc) HandleEvent(msg stanza.Message, iter Iter) error {
+	return f(msg, iter)
+}
+
+// Subscription is a description of a particular subscription for which we will
+// receive events.
+type Subscription struct {
+	ID             string
+	Node           string
+	Addr           jid.JID
+	Subscription   SubType
+	Configurable   bool
+	ConfigRequired bool
+}
+
+// Subscribe creates a new subscription to a namespace.
+//
+// The namespace should not include the +notify suffix.
+// If a subscription already exists for the namespace, Subscribe is a noop.
+func (*Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.Session, ns, node string, h Handler) (Subscription, error) {
+	// Outer IQ set request
+	iq := stanza.IQ{
+		XMLName: xml.Name{Local: "iq"},
+		From:    session.LocalAddr(),
+		To:      to,
+		Type:    stanza.SetIQ,
+	}
+
+	ns = ns + "+notify"
+
+	// Pubsub and subscribe elements
+	pubsubElement := xmlstream.Wrap(xmlstream.Wrap(nil, xml.StartElement{
+		Name: xml.Name{Local: "subscribe"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "node"},
+				Value: node,
+			},
+			{
+				Name:  xml.Name{Local: "jid"},
+				Value: to.String(),
+			},
+		},
+	}), xml.StartElement{
+		Name: xml.Name{Local: "pubsub", Space: ns},
+	})
+
+	respPayload, err := session.SendIQ(ctx, iq.Wrap(pubsubElement))
+
+	if err != nil {
+		return Subscription{}, err
+	}
+
+	// Response is expected for an IQ set request
+	if respPayload == nil {
+		return Subscription{}, fmt.Errorf("No response recieved for Subscribe request")
+	}
+
+	tok, err := respPayload.Token()
+	if err != nil {
+		return Subscription{}, err
+	}
+	start, ok := tok.(xml.StartElement)
+	if !ok {
+		return Subscription{}, fmt.Errorf("Expected IQ start, but got %T", tok)
+	}
+
+	if start.Name.Local != "iq" {
+		return Subscription{}, fmt.Errorf("Expected IQ element, but got %s", start.Name.Local)
+	}
+
+	_, iqType := attr.Get(start.Attr, "type")
+
+	// Success Case
+	if iqType == "result" {
+		tok, err := respPayload.Token()
+		if err != nil {
+			return Subscription{}, err
+		}
+
+		// pubsub element
+		start, ok = tok.(xml.StartElement)
+		if !ok {
+			return Subscription{}, fmt.Errorf("Expected pubsub start, but got %T", tok)
+		}
+
+		if start.Name.Local != "pubsub" {
+			return Subscription{}, fmt.Errorf("Expect pubsub element, but got %s", start.Name.Local)
+		}
+
+		_, providedNS := attr.Get(start.Attr, "xmlns")
+
+		if providedNS != ns {
+			return Subscription{}, fmt.Errorf("Expected %s namespace, but got %s", ns, providedNS)
+		}
+
+		tok, err = respPayload.Token()
+		if err != nil {
+			return Subscription{}, err
+		}
+
+		start, ok = tok.(xml.StartElement)
+		if !ok {
+			return Subscription{}, fmt.Errorf("Expected subscription start, but got %T", tok)
+		}
+
+		if start.Name.Local != "subscription" {
+			return Subscription{}, fmt.Errorf("Expected subscription element, but got %s", start.Name.Local)
+		}
+
+		// Parse attributes
+		errCode, node := attr.Get(start.Attr, "node")
+		if errCode == -1 {
+			return Subscription{}, fmt.Errorf("Subscription does not have node attribute")
+		}
+		errCode, jidAttr := attr.Get(start.Attr, "jid")
+		if errCode == -1 {
+			return Subscription{}, fmt.Errorf("Subscription does not have jid attribute")
+		}
+		addr, err := jid.Parse(jidAttr)
+		if err != nil {
+			return Subscription{}, fmt.Errorf("Could not parse jid")
+		}
+		errCode, subid := attr.Get(start.Attr, "subid")
+		if errCode == -1 {
+			return Subscription{}, fmt.Errorf("Subscription does not have subid attribute")
+		}
+		errCode, subscriptionStr := attr.Get(start.Attr, "subscription")
+		if errCode == -1 {
+			return Subscription{}, fmt.Errorf("Subscription does not have subscription attribute")
+		}
+		subscription, err := ParseSubType(subscriptionStr)
+		if err != nil {
+			return Subscription{}, err
+		}
+
+		// TODO: Configurable and Config Required Attributes
+		return Subscription{
+			Node:         node,
+			Addr:         addr,
+			ID:           subid,
+			Subscription: subscription,
+		}, nil
+	} else if iqType == "error" {
+		// TODO: Error Cases
+		return Subscription{}, nil
+	}
+
+	return Subscription{}, nil
+}
+
+func ParseSubType(subscription string) (SubType, error) {
+	switch subscription {
+	case "subscribed":
+		return SubSubscribed, nil
+	case "unconfigured":
+		return SubUnconfigured, nil
+	case "pending":
+		return SubPending, nil
+	case "none":
+		return SubNone, nil
+	default:
+		return SubNone, fmt.Errorf("Unexpected subscription type %s", subscription)
+	}
+}
+
+// SubscribeFunc is like Subscribe except it takes a HandlerFunc.
+func (*Subscriptions) SubscribeFunc(ctx context.Context, to jid.JID, session *xmpp.Session, ns string, h Handler) (Subscription, error) {
+	return Subscription{}, nil
+}
+
+// Unsubscribe removes a subscription and stops handling events.
+func (*Subscriptions) Unsubscribe(ctx context.Context, ns string) error {
+	return nil
 }
