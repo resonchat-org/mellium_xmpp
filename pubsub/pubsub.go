@@ -166,11 +166,33 @@ type Subscription struct {
 	ConfigRequired bool
 }
 
+// TokenReader satisfies the xmlstream.Marshaler interface.
+func (s *Subscription) TokenReader() xml.TokenReader {
+	panic("this function is not yet implemented")
+}
+
+// WriteXML satisfies the xmlstream.WriterTo interface.
+// It is like MarshalXML except it writes tokens to w.
+func (s *Subscription) WriteXML(w xmlstream.TokenWriter) (n int, err error) {
+	panic("this function is not yet implemented")
+}
+
+// MarshalXML implements xml.Marshaler.
+func (s *Subscription) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	panic("this function is not yet implemented")
+}
+
+// UnmarshalXML implements xml.Unmarshaler.
+func (s *Subscription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	panic("this function is not yet implemented")
+}
+
 // Subscribe creates a new subscription to a namespace.
 //
 // The namespace should not include the +notify suffix.
 // If a subscription already exists for the namespace, Subscribe is a noop.
-func (*Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.Session, ns, node string, h Handler) (Subscription, error) {
+// TODO: Extract Marshaller and Unmarshaller
+func (s *Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.Session, ns, node string, h Handler) (Subscription, error) {
 	// Outer IQ set request
 	iq := stanza.IQ{
 		XMLName: xml.Name{Local: "iq"},
@@ -278,14 +300,18 @@ func (*Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.S
 		if errCode == -1 {
 			return Subscription{}, fmt.Errorf("Subscription does not have subid attribute")
 		}
-		errCode, subscriptionStr := attr.Get(start.Attr, "subscription")
-		if errCode == -1 {
+		idx, _ := attr.Get(start.Attr, "subscription")
+		if idx == -1 {
 			return Subscription{}, fmt.Errorf("Subscription does not have subscription attribute")
 		}
-		subscription, err := ParseSubType(subscriptionStr)
+		subscription := SubType(0)
+		err = subscription.UnmarshalXMLAttr(start.Attr[idx])
 		if err != nil {
 			return Subscription{}, err
 		}
+
+		s.handlers[ns] = h
+		s.features = append(s.features, info.Feature{Var: ns})
 
 		// TODO: Configurable and Config Required Attributes
 		return Subscription{
@@ -295,34 +321,65 @@ func (*Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.S
 			Subscription: subscription,
 		}, nil
 	} else if iqType == "error" {
-		// TODO: Error Cases
+		// Error Cases
 		return Subscription{}, nil
 	}
 
 	return Subscription{}, nil
 }
 
-func ParseSubType(subscription string) (SubType, error) {
-	switch subscription {
-	case "subscribed":
-		return SubSubscribed, nil
-	case "unconfigured":
-		return SubUnconfigured, nil
-	case "pending":
-		return SubPending, nil
-	case "none":
-		return SubNone, nil
-	default:
-		return SubNone, fmt.Errorf("Unexpected subscription type %s", subscription)
+// UnmarshalXMLAttr satisfies xml.UnmarshalerAttr.
+func (s *SubType) UnmarshalXMLAttr(attr xml.Attr) error {
+	if attr.Name.Local != "subscription" {
+		return fmt.Errorf("Expected subscription attribute, but recieved %s", attr.Name.Local)
 	}
+
+	switch attr.Value {
+	case "subscribed":
+		*s = SubSubscribed
+	case "unconfigured":
+		*s = SubUnconfigured
+	case "pending":
+		*s = SubPending
+	case "none":
+		*s = SubNone
+	default:
+		return fmt.Errorf("Unexpected subscription type %s", attr.Value)
+	}
+
+	return nil
+}
+
+// MarshalXMLAttr satisfies xml.MarshalerAttr.
+func (s *SubType) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	attr := xml.Attr{Name: name}
+
+	switch *s {
+	case SubNone:
+		attr.Value = "none"
+	case SubPending:
+		attr.Value = "pending"
+	case SubUnconfigured:
+		attr.Value = "unconfigured"
+	case SubSubscribed:
+		attr.Value = "subscribed"
+	default:
+		return xml.Attr{}, fmt.Errorf("Unexpected SubType Value: %s", s)
+	}
+
+	return attr, nil
 }
 
 // SubscribeFunc is like Subscribe except it takes a HandlerFunc.
-func (*Subscriptions) SubscribeFunc(ctx context.Context, to jid.JID, session *xmpp.Session, ns string, h Handler) (Subscription, error) {
-	return Subscription{}, nil
+func (s *Subscriptions) SubscribeFunc(ctx context.Context, to jid.JID, session *xmpp.Session, ns, node string, h HandlerFunc) (Subscription, error) {
+	return s.Subscribe(ctx, to, session, ns, node, h)
 }
 
+// Proposed changes:
+// Takes in a Subscription so that it has ns, node, and jid?
+// Needs session for LocalAddr?
+// Returns subscription still bc has subscription attribute?
 // Unsubscribe removes a subscription and stops handling events.
-func (*Subscriptions) Unsubscribe(ctx context.Context, ns string) error {
-	return nil
+func (*Subscriptions) Unsubscribe(ctx context.Context, session *xmpp.Session, ns, node string) error {
+	panic("not yet implemented")
 }
