@@ -387,7 +387,7 @@ func (s *Subscriptions) Unsubscribe(ctx context.Context, session *xmpp.Session, 
 
 // Error represents an error returned by a pubsub service.
 type Error struct {
-	Stanza    stanza.Error
+	stanza.Error
 	Condition Condition
 
 	// The specific feature that caused the error.
@@ -405,49 +405,64 @@ type Error struct {
 
 // TokenReader satisfies the xmlstream.Marshaler interface.
 func (e Error) TokenReader() xml.TokenReader {
-  switch e.Condition {
-  case CondInvalidJID:
-    errorElement := stanza.Error {
-      Type: stanza.Modify,
-      Condition: stanza.BadRequest,
-    }
-    invalidJIDElement := xml.StartElement {
-      Name: xml.Name{Space: NSErrors, Local: "invalid-jid"},
-    }
-    return errorElement.Wrap(invalidJIDElement)
-  case CondPresenceRequired:
-    errorElement := stanza.Error {
-      Type: stanza.Auth,
-      Condition: stanza.NotAuthorized,
-    }
-    presenceRequiredElement := xml.StartElement {
-      Name: xml.Name{Space: NSErrors, Local: "presence-subscription-required"},
-    }
-    return errorElement.Wrap(presenceRequiredElement)
-  case CondNotInRosterGroup:
-    errorElement := stanza.Error {
-      Type: stanza.Auth,
-      Condition: stanza.NotAuthorized,
-    }
-    notInRosterElement := xml.StartElement {
-      Name: xml.Name{Space: NSErrors, Local: "not-in-roster-group"},
-    }
-    return errorElement.Wrap(notInRosterElement)
-  case CondClosedNode:
-    errorElement := stanza.Error {
-      Type: stanza.Cancel,
-      Condition: stanza.NotAllowed,
-    }
-    closedNodeElement := xml.StartElement {
-      Name: xml.Name{Space: NSErrors, Local: "closed-node"},
-    }
-    return errorElement.Wrap(closedNodeElement)
-  // TODO: case CondPaymentRequired:
-  // TODO: case CondForbidden:
-  case CondPendingSubscription:
-  // TODO: case CondBlocked:
-  case CondTooManySubscriptions:
+	switch e.Condition {
+	case CondInvalidJID:
+		e.Error.Type = stanza.Modify
+		e.Error.Condition = stanza.BadRequest
+		invalidJIDElement := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "invalid-jid"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, invalidJIDElement))
+	case CondPresenceRequired:
+		e.Error.Type = stanza.Auth
+		e.Error.Condition = stanza.NotAuthorized
+		presenceRequiredElement := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "presence-subscription-required"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, presenceRequiredElement))
+	case CondNotInRosterGroup:
+		e.Error.Type = stanza.Auth
+		e.Error.Condition = stanza.NotAuthorized
+		notInRosterElement := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "not-in-roster-group"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, notInRosterElement))
+	case CondClosedNode:
+		e.Error.Type = stanza.Cancel
+		e.Error.Condition = stanza.NotAllowed
+		closedNodeElement := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "closed-node"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, closedNodeElement))
+	// TODO: case CondPaymentRequired:
+	// TODO: case CondAnonymousSubscriptions:
+	case CondPendingSubscription:
+		e.Error.Type = stanza.Auth
+		e.Error.Condition = stanza.NotAuthorized
+		pendingSubscription := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "pending-subscription"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, pendingSubscription))
+	// TODO: case CondBlocked:
+	case CondTooManySubscriptions:
+		e.Error.Type = stanza.Wait
+		e.Error.Condition = stanza.PolicyViolation
+		tooManySubs := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "too-many-subscriptions"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, tooManySubs))
+	case CondUnsupported:
+		e.Error.Type = stanza.Cancel
+		e.Error.Condition = stanza.FeatureNotImplemented
+		unsupported := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "unsupported"},
+		}
+		return e.Error.Wrap(xmlstream.Wrap(nil, unsupported))
+		// TODO: case CondNodeMoved:
+		// TODO: case CondNodeDNE:
+	}
 
+	return e.Error.Wrap(nil)
 }
 
 // WriteXML satisfies the xmlstream.WriterTo interface.
@@ -467,6 +482,6 @@ func (e *Error) UnmarshalXML(*xml.Decoder, xml.StartElement) error {
 }
 
 // Error implements the error interface.
-func (e Error) Error() string {
-	panic("not yet implemented")
-}
+// func (e Error) Error() string {
+// 	panic("not yet implemented")
+// }
