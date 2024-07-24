@@ -12,6 +12,7 @@ import (
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/disco/info"
+	"mellium.im/xmpp/form"
 	"mellium.im/xmpp/internal/attr"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
@@ -380,6 +381,92 @@ func (s *Subscriptions) SubscribeFunc(ctx context.Context, to jid.JID, session *
 // Needs session for LocalAddr?
 // Returns subscription still bc has subscription attribute?
 // Unsubscribe removes a subscription and stops handling events.
-func (*Subscriptions) Unsubscribe(ctx context.Context, session *xmpp.Session, ns, node string) error {
+func (s *Subscriptions) Unsubscribe(ctx context.Context, session *xmpp.Session, ns, node string) error {
+	panic("not yet implemented")
+}
+
+// Error represents an error returned by a pubsub service.
+type Error struct {
+	Stanza    stanza.Error
+	Condition Condition
+
+	// The specific feature that caused the error.
+	// Only set if the Condition is Unsupported.
+	Feature string
+
+	// The new location of a pubsub node that has been moved.
+	// Only set if the Condition is Gone.
+	NewURI string
+
+	// The required configuration for the node.
+	// Only set if the Condition is ConfigurationRequired.
+	Configuration *form.Data
+}
+
+// TokenReader satisfies the xmlstream.Marshaler interface.
+func (e Error) TokenReader() xml.TokenReader {
+  switch e.Condition {
+  case CondInvalidJID:
+    errorElement := stanza.Error {
+      Type: stanza.Modify,
+      Condition: stanza.BadRequest,
+    }
+    invalidJIDElement := xml.StartElement {
+      Name: xml.Name{Space: NSErrors, Local: "invalid-jid"},
+    }
+    return errorElement.Wrap(invalidJIDElement)
+  case CondPresenceRequired:
+    errorElement := stanza.Error {
+      Type: stanza.Auth,
+      Condition: stanza.NotAuthorized,
+    }
+    presenceRequiredElement := xml.StartElement {
+      Name: xml.Name{Space: NSErrors, Local: "presence-subscription-required"},
+    }
+    return errorElement.Wrap(presenceRequiredElement)
+  case CondNotInRosterGroup:
+    errorElement := stanza.Error {
+      Type: stanza.Auth,
+      Condition: stanza.NotAuthorized,
+    }
+    notInRosterElement := xml.StartElement {
+      Name: xml.Name{Space: NSErrors, Local: "not-in-roster-group"},
+    }
+    return errorElement.Wrap(notInRosterElement)
+  case CondClosedNode:
+    errorElement := stanza.Error {
+      Type: stanza.Cancel,
+      Condition: stanza.NotAllowed,
+    }
+    closedNodeElement := xml.StartElement {
+      Name: xml.Name{Space: NSErrors, Local: "closed-node"},
+    }
+    return errorElement.Wrap(closedNodeElement)
+  // TODO: case CondPaymentRequired:
+  // TODO: case CondForbidden:
+  case CondPendingSubscription:
+  // TODO: case CondBlocked:
+  case CondTooManySubscriptions:
+
+}
+
+// WriteXML satisfies the xmlstream.WriterTo interface.
+// It is like MarshalXML except it writes tokens to w.
+func (e Error) WriteXML(xmlstream.TokenWriter) (int, error) {
+	panic("not yet implemented")
+}
+
+// MarshalXML implements xml.Marshaler.
+func (e Error) MarshalXML(*xml.Encoder, xml.StartElement) error {
+	panic("not yet implemented")
+}
+
+// UnmarshalXML implements xml.Unmarshaler.
+func (e *Error) UnmarshalXML(*xml.Decoder, xml.StartElement) error {
+	panic("not yet implemented")
+}
+
+// Error implements the error interface.
+func (e Error) Error() string {
 	panic("not yet implemented")
 }
