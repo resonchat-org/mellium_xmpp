@@ -174,19 +174,45 @@ type Subscription struct {
 }
 
 // TokenReader satisfies the xmlstream.Marshaler interface.
-func (s *Subscription) TokenReader() xml.TokenReader {
-	panic("this function is not yet implemented")
+func (s Subscription) TokenReader() xml.TokenReader {
+	pubsub := xml.StartElement{
+		Name: xml.Name{Space: NS, Local: "pubsub"},
+	}
+	subscription := xml.StartElement{
+		Name: xml.Name{Local: "subscription"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "node"},
+				Value: s.Node,
+			},
+			{
+				Name:  xml.Name{Local: "jid"},
+				Value: s.Addr.String(),
+			},
+			{
+				Name:  xml.Name{Local: "subid"},
+				Value: s.ID,
+			},
+			{
+				Name:  xml.Name{Local: "subscription"},
+				Value: s.Subscription.String(),
+			},
+		},
+	}
+
+	return xmlstream.Wrap(xmlstream.Wrap(nil, subscription), pubsub)
 }
 
 // WriteXML satisfies the xmlstream.WriterTo interface.
 // It is like MarshalXML except it writes tokens to w.
-func (s *Subscription) WriteXML(w xmlstream.TokenWriter) (n int, err error) {
-	panic("this function is not yet implemented")
+func (s Subscription) WriteXML(w xmlstream.TokenWriter) (n int, err error) {
+	return xmlstream.Copy(w, s.TokenReader())
 }
 
 // MarshalXML implements xml.Marshaler.
-func (s *Subscription) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
-	panic("this function is not yet implemented")
+func (s Subscription) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	_, err := s.WriteXML(e)
+	return err
 }
 
 // UnmarshalXML implements xml.Unmarshaler.
