@@ -387,7 +387,7 @@ func (s *Subscriptions) Unsubscribe(ctx context.Context, session *xmpp.Session, 
 
 // Error represents an error returned by a pubsub service.
 type Error struct {
-	stanza.Error
+	Stanza    stanza.Error
 	Condition Condition
 
 	// The specific feature that caused the error.
@@ -407,81 +407,208 @@ type Error struct {
 func (e Error) TokenReader() xml.TokenReader {
 	switch e.Condition {
 	case CondInvalidJID:
-		e.Error.Type = stanza.Modify
-		e.Error.Condition = stanza.BadRequest
+		e.Stanza.Type = stanza.Modify
+		e.Stanza.Condition = stanza.BadRequest
 		invalidJIDElement := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "invalid-jid"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, invalidJIDElement))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, invalidJIDElement))
 	case CondPresenceRequired:
-		e.Error.Type = stanza.Auth
-		e.Error.Condition = stanza.NotAuthorized
+		e.Stanza.Type = stanza.Auth
+		e.Stanza.Condition = stanza.NotAuthorized
 		presenceRequiredElement := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "presence-subscription-required"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, presenceRequiredElement))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, presenceRequiredElement))
 	case CondNotInRosterGroup:
-		e.Error.Type = stanza.Auth
-		e.Error.Condition = stanza.NotAuthorized
+		e.Stanza.Type = stanza.Auth
+		e.Stanza.Condition = stanza.NotAuthorized
 		notInRosterElement := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "not-in-roster-group"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, notInRosterElement))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, notInRosterElement))
 	case CondClosedNode:
-		e.Error.Type = stanza.Cancel
-		e.Error.Condition = stanza.NotAllowed
+		e.Stanza.Type = stanza.Cancel
+		e.Stanza.Condition = stanza.NotAllowed
 		closedNodeElement := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "closed-node"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, closedNodeElement))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, closedNodeElement))
 	// TODO: case CondPaymentRequired:
 	// TODO: case CondAnonymousSubscriptions:
 	case CondPendingSubscription:
-		e.Error.Type = stanza.Auth
-		e.Error.Condition = stanza.NotAuthorized
+		e.Stanza.Type = stanza.Auth
+		e.Stanza.Condition = stanza.NotAuthorized
 		pendingSubscription := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "pending-subscription"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, pendingSubscription))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, pendingSubscription))
 	// TODO: case CondBlocked:
 	case CondTooManySubscriptions:
-		e.Error.Type = stanza.Wait
-		e.Error.Condition = stanza.PolicyViolation
+		e.Stanza.Type = stanza.Wait
+		e.Stanza.Condition = stanza.PolicyViolation
 		tooManySubs := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "too-many-subscriptions"},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, tooManySubs))
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, tooManySubs))
 	case CondUnsupported:
-		e.Error.Type = stanza.Cancel
-		e.Error.Condition = stanza.FeatureNotImplemented
+		e.Stanza.Type = stanza.Cancel
+		e.Stanza.Condition = stanza.FeatureNotImplemented
 		unsupported := xml.StartElement{
 			Name: xml.Name{Space: NSErrors, Local: "unsupported"},
+			Attr: []xml.Attr{
+				{
+					Name:  xml.Name{Local: "feature"},
+					Value: "subscribe",
+				},
+			},
 		}
-		return e.Error.Wrap(xmlstream.Wrap(nil, unsupported))
-		// TODO: case CondNodeMoved:
-		// TODO: case CondNodeDNE:
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, unsupported))
+	// TODO: case CondGone:
+	// TODO: case CondNodeDNE:
+	case CondConfigRequired:
+		e.Stanza.Type = stanza.Modify
+		e.Stanza.Condition = stanza.NotAcceptable
+		configrequired := xml.StartElement{
+			Name: xml.Name{Space: NSErrors, Local: "configuration-required"},
+		}
+		return e.Stanza.Wrap(xmlstream.Wrap(nil, configrequired))
 	}
 
-	return e.Error.Wrap(nil)
+	return e.Stanza.Wrap(nil)
 }
 
 // WriteXML satisfies the xmlstream.WriterTo interface.
 // It is like MarshalXML except it writes tokens to w.
-func (e Error) WriteXML(xmlstream.TokenWriter) (int, error) {
-	panic("not yet implemented")
+func (e Error) WriteXML(w xmlstream.TokenWriter) (int, error) {
+	return xmlstream.Copy(w, e.TokenReader())
 }
 
 // MarshalXML implements xml.Marshaler.
-func (e Error) MarshalXML(*xml.Encoder, xml.StartElement) error {
-	panic("not yet implemented")
+func (e Error) MarshalXML(enc *xml.Encoder, _ xml.StartElement) error {
+	_, err := e.WriteXML(enc)
+	return err
 }
 
 // UnmarshalXML implements xml.Unmarshaler.
-func (e *Error) UnmarshalXML(*xml.Decoder, xml.StartElement) error {
-	panic("not yet implemented")
+func (e *Error) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var err error
+	e.Stanza, err = stanza.UnmarshalError(xmlstream.Wrap(nil, start))
+	if err != nil {
+		return err
+	}
+
+	switch e.Stanza.Type {
+	case stanza.Modify:
+		if e.Stanza.Condition == stanza.BadRequest {
+			tok, err := d.Token()
+			if err != nil {
+				return err
+			}
+			elem, ok := tok.(xml.StartElement)
+
+			if !ok {
+				return fmt.Errorf("Unexpected element: %s", tok)
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "invalid-jid"}) {
+				e.Condition = CondInvalidJID
+				return nil
+			}
+		}
+	case stanza.Auth:
+		if e.Stanza.Condition == stanza.NotAuthorized {
+			tok, err := d.Token()
+			if err != nil {
+				return err
+			}
+
+			elem, ok := tok.(xml.StartElement)
+			if !ok {
+				return fmt.Errorf("Unexpected element: %s", tok)
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "presence-subscription-required"}) {
+				e.Condition = CondPresenceRequired
+				return nil
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "not-in-roster-group"}) {
+				e.Condition = CondNotInRosterGroup
+				return nil
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "pending-subscription"}) {
+				e.Condition = CondPendingSubscription
+				return nil
+			}
+		}
+	case stanza.Cancel:
+		if e.Stanza.Condition == stanza.NotAllowed {
+			tok, err := d.Token()
+			if err != nil {
+				return err
+			}
+
+			elem, ok := tok.(xml.StartElement)
+			if !ok {
+				return fmt.Errorf("Unexpected element: %s", tok)
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "closed-node"}) {
+				e.Condition = CondClosedNode
+				return nil
+			}
+		}
+
+		if e.Stanza.Condition == stanza.FeatureNotImplemented {
+			tok, err := d.Token()
+			if err != nil {
+				return err
+			}
+
+			elem, ok := tok.(xml.StartElement)
+			if !ok {
+				return fmt.Errorf("Unexpected element: %s", tok)
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "unsupported"}) {
+				idx, val := attr.Get(elem.Attr, "feature")
+				if idx == -1 {
+					return fmt.Errorf("Expected field 'feature' not found")
+				}
+
+				if val != "subscribe" {
+					return fmt.Errorf("Unexpected feature in element <unsupported/>: %s", val)
+				}
+
+				e.Condition = CondUnsupported
+				return nil
+			}
+		}
+	case stanza.Wait:
+		if e.Stanza.Condition == stanza.PolicyViolation {
+			tok, err := d.Token()
+			if err != nil {
+				return err
+			}
+
+			elem, ok := tok.(xml.StartElement)
+			if !ok {
+				return fmt.Errorf("Unexpected element: %s", tok)
+			}
+
+			if elem.Name == (xml.Name{Space: NSErrors, Local: "too-many-subscriptions"}) {
+				e.Condition = CondTooManySubscriptions
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("Unable to Unmarshal pubsub error, unexpected error type: %s", e.Stanza.Type)
 }
 
 // Error implements the error interface.
-// func (e Error) Error() string {
-// 	panic("not yet implemented")
-// }
+func (e Error) Error() string {
+	panic("not yet implemented")
+}
