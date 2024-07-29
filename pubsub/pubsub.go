@@ -178,6 +178,7 @@ func (s Subscription) TokenReader() xml.TokenReader {
 	pubsub := xml.StartElement{
 		Name: xml.Name{Space: NS, Local: "pubsub"},
 	}
+
 	subscription := xml.StartElement{
 		Name: xml.Name{Local: "subscription"},
 		Attr: []xml.Attr{
@@ -217,108 +218,76 @@ func (s Subscription) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 
 // UnmarshalXML implements xml.Unmarshaler.
 func (s *Subscription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	if start.Name.Local != "iq" {
-		return fmt.Errorf("Expected IQ element, but got %s", start.Name.Local)
+	if start.Name.Local != "pubsub" {
+		return fmt.Errorf("Expected pubsub element, but got %s", start.Name.Local)
 	}
 
-	_, iqType := attr.Get(start.Attr, "type")
+	// _, providedNS := attr.Get(start.Attr, "xmlns")
 
-	// Success Case
-	if iqType == "result" {
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
+	// if providedNS != ns {
+	// 	return Subscription{}, fmt.Errorf("Expected %s namespace, but got %s", ns, providedNS)
+	// }
 
-		// pubsub element
-		start, ok := tok.(xml.StartElement)
-		if !ok {
-			return fmt.Errorf("Expected pubsub start, but got %T", tok)
-		}
-
-		if start.Name.Local != "pubsub" {
-			return fmt.Errorf("Expect pubsub element, but got %s", start.Name.Local)
-		}
-
-		// _, providedNS := attr.Get(start.Attr, "xmlns")
-
-		// if providedNS != ns {
-		// 	return Subscription{}, fmt.Errorf("Expected %s namespace, but got %s", ns, providedNS)
-		// }
-
-		tok, err = d.Token()
-		if err != nil {
-			return err
-		}
-
-		start, ok = tok.(xml.StartElement)
-		if !ok {
-			return fmt.Errorf("Expected subscription start, but got %T", tok)
-		}
-
-		if start.Name.Local != "subscription" {
-			return fmt.Errorf("Expected subscription element, but got %s", start.Name.Local)
-		}
-
-		// Parse attributes
-		errCode, node := attr.Get(start.Attr, "node")
-		if errCode == -1 {
-			return fmt.Errorf("Subscription does not have node attribute")
-		}
-		errCode, jidAttr := attr.Get(start.Attr, "jid")
-		if errCode == -1 {
-			return fmt.Errorf("Subscription does not have jid attribute")
-		}
-		addr, err := jid.Parse(jidAttr)
-		if err != nil {
-			return fmt.Errorf("Could not parse jid")
-		}
-		errCode, subid := attr.Get(start.Attr, "subid")
-		if errCode == -1 {
-			return fmt.Errorf("Subscription does not have subid attribute")
-		}
-		idx, _ := attr.Get(start.Attr, "subscription")
-		if idx == -1 {
-			return fmt.Errorf("Subscription does not have subscription attribute")
-		}
-		subscription := SubType(0)
-		err = subscription.UnmarshalXMLAttr(start.Attr[idx])
-		if err != nil {
-			return err
-		}
-
-		// s.handlers[node] = h
-		// s.features = append(s.features, info.Feature{Var: ns})
-
-		// TODO: Configurable and Config Required Attributes
-		s.Node = node
-		s.Addr = addr
-		s.ID = subid
-		s.Subscription = subscription
-		return nil
-	} else if iqType == "error" {
-		// Error Cases
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
-
-		start, ok := tok.(xml.StartElement)
-		if !ok {
-			return fmt.Errorf("Expected error start, but got %T", tok)
-		}
-
-		return s.Error.UnmarshalXML(d, start)
+	tok, err := d.Token()
+	if err != nil {
+		return err
 	}
 
-	return fmt.Errorf("Unexpected IQ type: %s", iqType)
+	start, ok := tok.(xml.StartElement)
+	if !ok {
+		return fmt.Errorf("Expected subscription start, but got %T", tok)
+	}
+
+	if start.Name.Local != "subscription" {
+		return fmt.Errorf("Expected subscription element, but got %s", start.Name.Local)
+	}
+
+	// Parse attributes
+	errCode, node := attr.Get(start.Attr, "node")
+	if errCode == -1 {
+		return fmt.Errorf("Subscription does not have node attribute")
+	}
+	errCode, jidAttr := attr.Get(start.Attr, "jid")
+	if errCode == -1 {
+		return fmt.Errorf("Subscription does not have jid attribute")
+	}
+	addr, err := jid.Parse(jidAttr)
+	if err != nil {
+		return fmt.Errorf("Could not parse jid")
+	}
+	errCode, subid := attr.Get(start.Attr, "subid")
+	if errCode == -1 {
+		return fmt.Errorf("Subscription does not have subid attribute")
+	}
+	idx, _ := attr.Get(start.Attr, "subscription")
+	if idx == -1 {
+		return fmt.Errorf("Subscription does not have subscription attribute")
+	}
+	subscription := SubType(0)
+	err = subscription.UnmarshalXMLAttr(start.Attr[idx])
+	if err != nil {
+		return err
+	}
+
+	// s.handlers[node] = h
+	// s.features = append(s.features, info.Feature{Var: ns})
+
+	// TODO: Configurable and Config Required Attributes
+	s.Node = node
+	s.Addr = addr
+	s.ID = subid
+	s.Subscription = subscription
+
+	d.Skip()
+	d.Skip()
+
+	return nil
 }
 
 // Subscribe creates a new subscription to a namespace.
 //
 // The node should not include the +notify suffix.
 // If a subscription already exists for the namespace, Subscribe is a noop.
-// TODO: Extract Marshaler
 func (s *Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp.Session, node string, h Handler) (Subscription, error) {
 	// Outer IQ set request
 	iq := stanza.IQ{
@@ -349,6 +318,7 @@ func (s *Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp
 	if err != nil {
 		return Subscription{}, err
 	}
+
 	subscription := Subscription{}
 	tok, err := resp.Token()
 	if err != nil {
@@ -360,9 +330,34 @@ func (s *Subscriptions) Subscribe(ctx context.Context, to jid.JID, session *xmpp
 		return Subscription{}, fmt.Errorf("Expected IQ start element, but got %T", tok)
 	}
 
-	err = xml.NewTokenDecoder(resp).DecodeElement(&subscription, &start)
-	if err != nil {
-		return Subscription{}, err
+	if start.Name.Local != "iq" {
+		return Subscription{}, fmt.Errorf("Expected IQ element, but got %s", start.Name.Local)
+	}
+
+	_, iqType := attr.Get(start.Attr, "type")
+	d := xml.NewTokenDecoder(resp)
+	// Success Case
+	if iqType == "result" {
+		err = d.DecodeElement(&subscription, &start)
+		if err != nil {
+			return Subscription{}, err
+		}
+
+		return subscription, nil
+	}
+	if iqType == "error" {
+		// Error Cases
+		tok, err := d.Token()
+		if err != nil {
+			return Subscription{}, err
+		}
+
+		start, ok := tok.(xml.StartElement)
+		if !ok {
+			return Subscription{}, fmt.Errorf("Expected error start, but got %T", tok)
+		}
+
+		return subscription, subscription.Error.UnmarshalXML(d, start)
 	}
 
 	s.handlers[node] = h
