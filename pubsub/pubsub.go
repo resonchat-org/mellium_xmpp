@@ -94,7 +94,6 @@ func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) err
 
 	for _, feature := range s.features {
 		err = f(feature)
-
 		if err != nil {
 			return err
 		}
@@ -107,7 +106,6 @@ func (s *Subscriptions) ForFeatures(node string, f func(info.Feature) error) err
 func (s *Subscriptions) HandleMessage(p stanza.Message, r xmlstream.TokenReadEncoder) error {
 	// Skip the initial event token
 	_, err := r.Token()
-
 	if err != nil {
 		return err
 	}
