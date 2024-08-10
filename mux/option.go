@@ -56,6 +56,20 @@ func Message(typ stanza.MessageType, payload xml.Name, h MessageHandler) Option 
 	}
 }
 
+// MessageFallback returns an option that matches message stanzas of any type.
+// Only messages not handled by Message patterns are passed to this handler.
+func MessageFallback(h MessageHandler) Option {
+	return func(m *ServeMux) {
+		if h == nil {
+			panic("mux: nil message handler")
+		}
+		if m.messageFallback != nil {
+			panic("mux: message fallback handler already registered")
+		}
+		m.messageFallback = h
+	}
+}
+
 // MessageFunc returns an option that matches message stanzas.
 // For more information see Message.
 func MessageFunc(typ stanza.MessageType, payload xml.Name, h MessageHandlerFunc) Option {

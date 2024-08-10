@@ -54,6 +54,7 @@ type ServeMux struct {
 	patterns         map[xml.Name]xmpp.Handler
 	iqPatterns       map[pattern]IQHandler
 	msgPatterns      map[pattern]MessageHandler
+	messageFallback  MessageHandler
 	presencePatterns map[pattern]PresenceHandler
 	features         []info.FeatureIter
 	idents           []info.IdentityIter
@@ -247,6 +248,12 @@ func (m *ServeMux) ForItems(node string, f func(items.Item) error) error {
 			if err != nil {
 				return err
 			}
+		}
+	}
+	if itemIter, ok := m.messageFallback.(items.Iter); ok {
+		err := itemIter.ForItems(node, f)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -484,6 +491,8 @@ func forChildren(m *ServeMux, stanzaVal interface{}, t xmlstream.TokenReadEncode
 	}
 	r.buf = append(r.buf, *start)
 
+	handled := false
+
 	// TODO: figure out a good buffer size
 	errs := make([]error, 0, 10)
 
@@ -501,7 +510,7 @@ func forChildren(m *ServeMux, stanzaVal interface{}, t xmlstream.TokenReadEncode
 		switch s := stanzaVal.(type) {
 		case stanza.Presence:
 			br := &bufReader{r: t, buf: r.buf}
-			h, _ := m.PresenceHandler(s.Type, start.Name)
+			h, ok := m.PresenceHandler(s.Type, start.Name)
 			err = h.HandlePresence(s, struct {
 				xml.TokenReader
 				xmlstream.Encoder
@@ -510,9 +519,10 @@ func forChildren(m *ServeMux, stanzaVal interface{}, t xmlstream.TokenReadEncode
 				Encoder:     t,
 			})
 			r.buf = br.buf
+			handled = handled || ok
 		case stanza.Message:
 			br := &bufReader{r: t, buf: r.buf}
-			h, _ := m.MessageHandler(s.Type, start.Name)
+			h, ok := m.MessageHandler(s.Type, start.Name)
 			err = h.HandleMessage(s, struct {
 				xml.TokenReader
 				xmlstream.Encoder
@@ -521,6 +531,7 @@ func forChildren(m *ServeMux, stanzaVal interface{}, t xmlstream.TokenReadEncode
 				Encoder:     t,
 			})
 			r.buf = br.buf
+			handled = handled || ok
 		}
 		if err != nil {
 			errs = append(errs, err)
@@ -547,14 +558,21 @@ func forChildren(m *ServeMux, stanzaVal interface{}, t xmlstream.TokenReadEncode
 				Encoder:     t,
 			})
 		case stanza.Message:
-			h, _ := m.MessageHandler(s.Type, xml.Name{})
-			return h.HandleMessage(s, struct {
+			h, ok := m.MessageHandler(s.Type, xml.Name{})
+			err := h.HandleMessage(s, struct {
 				xml.TokenReader
 				xmlstream.Encoder
 			}{
 				TokenReader: r,
 				Encoder:     t,
 			})
+			if err != nil {
+				return err
+			}
+			handled = handled || ok
+			if !handled && m.messageFallback != nil {
+				return m.messageFallback.HandleMessage(s, t)
+			}
 		}
 	}
 	return nil
