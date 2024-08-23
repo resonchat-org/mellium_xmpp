@@ -575,6 +575,9 @@ func handleInputStream(s *Session, handler Handler) (err error) {
 	if typ == string(stanza.ResultIQ) || typ == "error" {
 		s.sentIQMutex.Lock()
 		c := s.sentIQs[id]
+		if c != nil {
+			delete(s.sentIQs, id)
+		}
 		s.sentIQMutex.Unlock()
 		if c != nil {
 			inner := xmlstream.Inner(r)
@@ -973,6 +976,10 @@ func (s *Session) sendResp(ctx context.Context, id string, payload xml.TokenRead
 	c := make(chan xmlstream.TokenReadCloser)
 
 	s.sentIQMutex.Lock()
+	_, ok := s.sentIQs[id]
+	if ok {
+		return nil, fmt.Errorf("xmpp: duplicate ids are not supported")
+	}
 	s.sentIQs[id] = c
 	s.sentIQMutex.Unlock()
 	defer func() {
@@ -990,7 +997,23 @@ func (s *Session) sendResp(ctx context.Context, id string, payload xml.TokenRead
 	case rr := <-c:
 		return rr, nil
 	case <-ctx.Done():
-		close(c)
+		s.sentIQMutex.Lock()
+		_, ok := s.sentIQs[id]
+		if ok {
+			delete(s.sentIQs, id)
+		}
+		s.sentIQMutex.Unlock()
+		if ok {
+			close(c)
+		} else {
+			// Id not found in sentIQs means that it has been taken by stream handler
+			// to pass a response through the channel. We have to read the response
+			// and close the channel.
+			go func() {
+				rr := <-c
+				rr.Close()
+			}()
+		}
 		return nil, ctx.Err()
 	}
 }
