@@ -28,13 +28,13 @@ var (
 
 func TestCompare(t *testing.T) {
 	hostGoneApp := stream.HostGone.ApplicationError(xmlstream.Wrap(nil, xml.StartElement{}))
-	if !errors.Is(stream.HostGone, hostGoneApp) {
+	if !errors.Is(hostGoneApp, stream.HostGone) {
 		t.Errorf("did not expect adding application error to affect comparison")
 	}
 	if errors.Is(stream.HostGone, stream.BadNamespacePrefix) {
 		t.Errorf("did not expect two errors with different names to be equivalent")
 	}
-	if !errors.Is(stream.HostGone, stream.Error{}) {
+	if !errors.Is(stream.Error{}, stream.HostGone) {
 		t.Errorf("expected empty stream error to compare to any other stream error")
 	}
 }
