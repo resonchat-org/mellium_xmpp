@@ -575,9 +575,7 @@ func handleInputStream(s *Session, handler Handler) (err error) {
 	if typ == string(stanza.ResultIQ) || typ == "error" {
 		s.sentIQMutex.Lock()
 		c := s.sentIQs[id]
-		if c != nil {
-			delete(s.sentIQs, id)
-		}
+		delete(s.sentIQs, id)
 		s.sentIQMutex.Unlock()
 		if c != nil {
 			inner := xmlstream.Inner(r)
@@ -982,26 +980,25 @@ func (s *Session) sendResp(ctx context.Context, id string, payload xml.TokenRead
 	}
 	s.sentIQs[id] = c
 	s.sentIQMutex.Unlock()
-	defer func() {
-		s.sentIQMutex.Lock()
-		delete(s.sentIQs, id)
-		s.sentIQMutex.Unlock()
-	}()
 
 	err := s.SendElement(ctx, payload, start)
 	if err != nil {
+		s.sentIQMutex.Lock()
+		delete(s.sentIQs, id)
+		s.sentIQMutex.Unlock()
 		return nil, err
 	}
 
 	select {
 	case rr := <-c:
+		s.sentIQMutex.Lock()
+		delete(s.sentIQs, id)
+		s.sentIQMutex.Unlock()
 		return rr, nil
 	case <-ctx.Done():
 		s.sentIQMutex.Lock()
 		_, ok := s.sentIQs[id]
-		if ok {
-			delete(s.sentIQs, id)
-		}
+		delete(s.sentIQs, id)
 		s.sentIQMutex.Unlock()
 		if ok {
 			close(c)
