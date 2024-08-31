@@ -974,32 +974,34 @@ func (s *Session) sendResp(ctx context.Context, id string, payload xml.TokenRead
 	c := make(chan xmlstream.TokenReadCloser)
 
 	s.sentIQMutex.Lock()
-	_, ok := s.sentIQs[id]
-	if ok {
-		return nil, fmt.Errorf("xmpp: duplicate ids are not supported")
-	}
 	s.sentIQs[id] = c
 	s.sentIQMutex.Unlock()
+	idDeleted := false
+	defer func() {
+		if !idDeleted {
+			s.sentIQMutex.Lock()
+			delete(s.sentIQs, id)
+			s.sentIQMutex.Unlock()
+		}
+	}()
 
 	err := s.SendElement(ctx, payload, start)
 	if err != nil {
-		s.sentIQMutex.Lock()
-		delete(s.sentIQs, id)
-		s.sentIQMutex.Unlock()
 		return nil, err
 	}
 
 	select {
 	case rr := <-c:
-		s.sentIQMutex.Lock()
-		delete(s.sentIQs, id)
-		s.sentIQMutex.Unlock()
+		// Sender MUST delete id from sentIQs before using this channel
+		// so we don't have to do this.
+		idDeleted = true
 		return rr, nil
 	case <-ctx.Done():
 		s.sentIQMutex.Lock()
 		_, ok := s.sentIQs[id]
 		delete(s.sentIQs, id)
 		s.sentIQMutex.Unlock()
+		idDeleted = true
 		if ok {
 			close(c)
 		} else {
