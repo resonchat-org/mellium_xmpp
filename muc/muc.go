@@ -131,8 +131,9 @@ type Client struct {
 	managedM sync.Mutex
 
 	// HandleInvite will be called if we receive a mediated MUC invitation.
-	HandleInvite       func(Invitation)
-	HandleUserPresence func(stanza.Presence, Item)
+	HandleInvite        func(Invitation)
+	HandleUserPresence  func(stanza.Presence, Item)
+	HandleUserPresence2 func(*Channel, stanza.Presence, Item)
 }
 
 // HandleMessage satisfies mux.MessageHandler.
@@ -198,6 +199,9 @@ func (c *Client) HandlePresence(p stanza.Presence, r xmlstream.TokenReadEncoder)
 
 	switch p.Type {
 	case stanza.AvailablePresence:
+		if decodedPresence.X.XMLName.Space == NSUser && c.HandleUserPresence2 != nil {
+			c.HandleUserPresence2(channel, decodedPresence.Presence, decodedPresence.X.Item)
+		}
 		if channel.join != nil {
 			channel.join <- p.From
 			channel.join = nil
