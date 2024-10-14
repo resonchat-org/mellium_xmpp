@@ -9,20 +9,30 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"strconv"
 	"sync"
+	"time"
 
 	"mellium.im/xmpp/internal/discover"
 	"mellium.im/xmpp/jid"
 )
+
+const DefaultAttemptTimeoutDuration = 5 * time.Second
 
 // Client discovers and connects to the address on the named network with a
 // client-to-server (c2s) connection.
 //
 // For more information see the Dialer type.
 func Client(ctx context.Context, network string, addr jid.JID) (net.Conn, error) {
+	return ClientWithLogger(ctx, network, addr, log.New(io.Discard, "", 0))
+}
+
+func ClientWithLogger(ctx context.Context, network string, addr jid.JID, logger *log.Logger) (net.Conn, error) {
 	var d Dialer
+	d.Logger = logger
 	return d.Dial(ctx, network, addr)
 }
 
@@ -65,6 +75,12 @@ type Dialer struct {
 	// The default value is interpreted as a tls.Config with the expected host set
 	// to that of the connection addresses domain part.
 	TLSConfig *tls.Config
+
+	// Amount of time to allow for each dial attempt. A zero value means the
+	// default (DefaultAttemptTimeoutDuration) will be used.
+	AttemptTimeoutDuration time.Duration
+
+	Logger *log.Logger
 }
 
 // Dial discovers and connects to the address on the named network.
@@ -89,6 +105,7 @@ func (d *Dialer) DialServer(ctx context.Context, network string, addr jid.JID, s
 }
 
 func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server string) (net.Conn, error) {
+	d.Logger.Print("dialing")
 	cfg := d.TLSConfig
 	if cfg == nil {
 		cfg = &tls.Config{
@@ -152,12 +169,22 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 	// Try dialing all of the SRV records we know about, breaking as soon as the
 	// connection is established.
 	var err error
+
+	timeoutDuration := DefaultAttemptTimeoutDuration
+
+	if d.AttemptTimeoutDuration != 0 {
+		timeoutDuration = d.AttemptTimeoutDuration
+	}
+
 	for i, addr := range addrs {
+		ctx, cancel := context.WithTimeout(ctx, timeoutDuration)
+
 		var c net.Conn
 		var e error
 		// Do not dial expecting a TLS connection if we're trying addreses that we
 		// expect starttls on or if we have implicit TLS disabled.
 		if d.NoTLS || i >= len(xmppsAddrs) {
+			d.Logger.Print("dialing non tls dialer for addr", addr)
 			c, e = d.Dialer.DialContext(ctx, network, net.JoinHostPort(
 				addr.Target,
 				strconv.FormatUint(uint64(addr.Port), 10),
@@ -167,11 +194,15 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 				NetDialer: &d.Dialer,
 				Config:    cfg,
 			}
+			d.Logger.Print("dialing tls dialer for addr", addr)
 			c, e = tlsDialer.DialContext(ctx, network, net.JoinHostPort(
 				addr.Target,
 				strconv.FormatUint(uint64(addr.Port), 10),
 			))
 		}
+
+		cancel()
+
 		if e != nil {
 			err = e
 			continue
