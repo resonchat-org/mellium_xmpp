@@ -76,7 +76,7 @@ func (bp bindPayload) TokenReader() xml.TokenReader {
 	if bp.Resource != "" {
 		return xmlstream.Wrap(
 			xmlstream.ReaderFunc(func() (xml.Token, error) {
-				return xml.CharData(bp.JID.String()), io.EOF
+				return xml.CharData(bp.Resource), io.EOF
 			}),
 			xml.StartElement{Name: xml.Name{Local: "resource"}},
 		)
