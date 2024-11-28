@@ -209,6 +209,9 @@ func (c *Channel) JoinPresence(ctx context.Context, p stanza.Presence, opt ...Op
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// c.join is assigned nil right after value is written to it.
+	// To avoid data race save channel to the local variable.
+	joinChan := c.join
 	errChan := make(chan error)
 	go func(errChan chan<- error) {
 		resp, err := c.session.SendPresenceElement(ctx, conf.TokenReader(), p)
@@ -248,7 +251,7 @@ func (c *Channel) JoinPresence(ctx context.Context, p stanza.Presence, opt ...Op
 	select {
 	case err := <-errChan:
 		return err
-	case roomAddr := <-c.join:
+	case roomAddr := <-joinChan:
 		c.addr = roomAddr
 	case <-ctx.Done():
 		return ctx.Err()
