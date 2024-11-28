@@ -149,9 +149,10 @@ type Session struct {
 
 	in struct {
 		stream.Info
-		d      xml.TokenReader
-		ctx    context.Context
-		cancel context.CancelFunc
+		d        xml.TokenReader
+		ctxMutex sync.Mutex
+		ctx      context.Context
+		cancel   context.CancelFunc
 		sync.Locker
 	}
 	out struct {
@@ -456,9 +457,12 @@ func (s *Session) Serve(h Handler) (err error) {
 	}()
 
 	for {
+		s.in.ctxMutex.Lock()
+		inCtx := s.in.ctx
+		s.in.ctxMutex.Unlock()
 		select {
-		case <-s.in.ctx.Done():
-			return s.in.ctx.Err()
+		case <-inCtx.Done():
+			return inCtx.Err()
 		default:
 		}
 		err := handleInputStream(s, h)
@@ -883,8 +887,10 @@ func (s *Session) RemoteAddr() jid.JID {
 // as closed and any blocking calls to Serve will return an error.
 // This is normally called just before a call to Close.
 func (s *Session) SetCloseDeadline(t time.Time) error {
+	s.in.ctxMutex.Lock()
 	oldCancel := s.in.cancel
 	s.in.ctx, s.in.cancel = context.WithDeadline(context.Background(), t)
+	s.in.ctxMutex.Unlock()
 	if oldCancel != nil {
 		oldCancel()
 	}
@@ -1012,6 +1018,8 @@ func (s *Session) closeInputStream() {
 	defer s.in.Unlock()
 	s.stateMutex.Lock()
 	defer s.stateMutex.Unlock()
+	s.in.ctxMutex.Lock()
+	defer s.in.ctxMutex.Unlock()
 	s.state |= InputStreamClosed
 	s.in.cancel()
 }
