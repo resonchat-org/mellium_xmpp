@@ -239,7 +239,7 @@ func (c *Client) JoinPresence(ctx context.Context, p stanza.Presence, s *xmpp.Se
 		session: s,
 
 		join:   make(chan jid.JID, 1),
-		depart: make(chan struct{}),
+		depart: make(chan struct{}, 1),
 	}
 	if c.managed == nil {
 		c.managed = make(map[string]*Channel)
