@@ -50,36 +50,9 @@ type Link struct {
 	Href string `xml:"href,attr" json:"href"`
 }
 
-// LookupPort returns the default port for the provided network and service
-// using net.LookupPort.
-// If the provided service is one of xmpp[s]-client, xmpp[s]-server, or
-// xmpp-bosh and it is not found by net.LookupPort, a default value is returned.
-func LookupPort(network, service string) (uint16, error) {
-	p, err := net.LookupPort(network, service)
-	if err == nil {
-		return uint16(p), err
-	}
-	switch service {
-	case "xmpps-client":
-		// This port isn't actually registered with IANA for XMPP use, but for
-		// historical reasons it's widely used for implicit TLS.
-		return 5223, nil
-	case "xmpp-client":
-		return 5222, nil
-	case "xmpp-server":
-		return 5269, nil
-	case "xmpps-server":
-		// This port isn't actually registered with IANA for XMPP use, but for
-		// historical reasons it's widely used for implicit TLS.
-		return 5270, nil
-	case "xmpp-bosh":
-		return 5280, nil
-	}
-	return 0, err
-}
-
 func isNotFound(err error) bool {
-	dnsErr, ok := err.(*net.DNSError)
+	var dnsErr *net.DNSError
+	ok := errors.As(err, &dnsErr)
 	return ok && dnsErr.IsNotFound
 }
 
@@ -118,33 +91,33 @@ func FallbackRecords(service, domain string) []*net.SRV {
 }
 
 // LookupService looks for an XMPP service hosted by the given address.
-// It returns addresses from SRV records and if none are found returns several
-// fallback records using the default domain of the JID and common ports on
-// which XMPP servers listen for implicit TLS connections.
-// If the target of the first record is "." it is removed and an empty list is
-// returned.
+// It returns addresses from SRV records and if none are found returns an empty
+// list and a nil error (it does not pass through a "not found" error).
+// If notPresent is true it indicates that the server explicitly does not
+// support this service (ie. we shouldn't try fallbacks or defaults).
 // Service should be one of "xmpp[s]-client" or "xmpp[s]-server".
-func LookupService(ctx context.Context, resolver *net.Resolver, service string, addr jid.JID) (addrs []*net.SRV, err error) {
+func LookupService(ctx context.Context, resolver *net.Resolver, service string, addr jid.JID) (addrs []*net.SRV, notPresent bool, err error) {
 	return LookupServiceByDomain(ctx, resolver, service, addr.Domainpart())
 }
 
 // LookupServiceByDomain behaves exactly the same as LookupService, besides
 // that the domain it tries to connect to is given as argument instead of
 // using the domainpart of the JID.
-func LookupServiceByDomain(ctx context.Context, resolver *net.Resolver, service string, domain string) (addrs []*net.SRV, err error) {
+func LookupServiceByDomain(ctx context.Context, resolver *net.Resolver, service string, domain string) (addrs []*net.SRV, notPresent bool, err error) {
 	switch service {
 	case "xmpp-client", "xmpp-server", "xmpps-client", "xmpps-server":
 	default:
-		return nil, ErrInvalidService
+		return nil, false, ErrInvalidService
 	}
 	_, addrs, err = resolver.LookupSRV(ctx, service, "tcp", domain)
 	if err != nil {
-		if !isNotFound(err) {
-			return nil, err
+		if isNotFound(err) {
+			// If the DNS record was not found there are no services.
+			// This is not an error, it is expected behavior, so return an empty list
+			// and no error.
+			return nil, false, nil
 		}
-
-		// Add a fallback to the JID.
-		return FallbackRecords(service, domain), nil
+		return nil, false, err
 	}
 
 	// RFC 6230 §3.2.1
@@ -157,9 +130,9 @@ func LookupServiceByDomain(ctx context.Context, resolver *net.Resolver, service 
 	//        a Target "means that the service is decidedly not available at
 	//        this domain".)
 	if len(addrs) == 1 && addrs[0].Target == "." {
-		return nil, nil
+		return nil, true, nil
 	}
-	return addrs, nil
+	return addrs, false, nil
 }
 
 // LookupWebSocket discovers websocket endpoints that are valid for the given

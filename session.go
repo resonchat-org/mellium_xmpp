@@ -22,6 +22,7 @@ import (
 	"mellium.im/xmpp/internal/attr"
 	"mellium.im/xmpp/internal/marshal"
 	intstream "mellium.im/xmpp/internal/stream"
+	"mellium.im/xmpp/internal/wskey"
 	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 	"mellium.im/xmpp/stream"
@@ -125,8 +126,9 @@ const (
 )
 
 type tokenReadChan struct {
-	c   chan xmlstream.TokenReadCloser
-	ctx context.Context
+	stanzaName xml.Name
+	c          chan xmlstream.TokenReadCloser
+	ctx        context.Context
 }
 
 // A Session represents an XMPP session comprising an input and an output XML
@@ -162,6 +164,8 @@ type Session struct {
 		}
 		sync.Locker
 	}
+
+	ws bool
 }
 
 var _ tlsConn = (*Session)(nil)
@@ -233,12 +237,18 @@ func negotiateSession(ctx context.Context, location, origin jid.JID, rw io.ReadW
 		defer setDeadline(ctx, conn)()
 	}
 
+	// This is a secret internal API that lets us use this same negotiator
+	// implementation in the websocket package without copy/pasting the entire
+	// implementation or creating import loops.
+	// For more information see the internal/wskey package.
+	wsCtx := ctx.Value(wskey.Key{})
 	s := &Session{
 		conn:        newConn(rw, nil),
 		features:    make(map[string]interface{}),
 		negotiated:  make(map[string]struct{}),
 		sentStanzas: make(map[string]tokenReadChan),
 		state:       state,
+		ws:          wsCtx != nil,
 	}
 
 	if s.state&Received == Received {
@@ -306,7 +316,7 @@ func negotiateSession(ctx context.Context, location, origin jid.JID, rw io.ReadW
 		s.state |= mask
 	}
 
-	s.in.d = intstream.Reader(s.in.d)
+	s.in.d = intstream.Reader(s.in.d, s.ws)
 	se := &stanzaEncoder{TokenWriteFlusher: s.out.e, ns: s.out.Info.XMLNS}
 	if s.out.Info.XMLNS == stanza.NSServer {
 		se.from = s.LocalAddr()
@@ -538,7 +548,7 @@ func handleInputStream(s *Session, handler Handler) (err error) {
 	rc := s.TokenReader()
 	/* #nosec */
 	defer rc.Close()
-	r := intstream.Reader(rc)
+	r := intstream.Reader(rc, s.ws)
 
 	tok, err := r.Token()
 	if err != nil {
@@ -581,7 +591,8 @@ func handleInputStream(s *Session, handler Handler) (err error) {
 		s.sentStanzaMutex.Lock()
 		readerChan, ok := s.sentStanzas[id]
 		s.sentStanzaMutex.Unlock()
-		if ok {
+		emptySpace := xml.Name{Local: start.Name.Local}
+		if ok && readerChan.stanzaName == start.Name || readerChan.stanzaName == emptySpace {
 			inner := xmlstream.Inner(r)
 			select {
 			case readerChan.c <- iqResponder{
@@ -982,8 +993,9 @@ func (s *Session) sendResp(ctx context.Context, id string, payload xml.TokenRead
 
 	s.sentStanzaMutex.Lock()
 	s.sentStanzas[id] = tokenReadChan{
-		c:   c,
-		ctx: ctx,
+		stanzaName: start.Name,
+		c:          c,
+		ctx:        ctx,
 	}
 	s.sentStanzaMutex.Unlock()
 	defer func() {

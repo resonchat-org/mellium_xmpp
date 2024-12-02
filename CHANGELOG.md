@@ -2,24 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
-
 ## Unreleased
 
 ### Added
 
+- dial: respect "service not supported" SRV records and do not attempt to dial
+  fallback records if the server has indicated that they do not support a
+  specific service.
+
+
+## v0.22.0 — 2024-09-23
+
+### Security
+
+- xmpp: fix incorrect stanza handling when different stanza type had same ID.
+        A CVE has been issued with the id [CVE-2024-46957].
+
+[CVE-2024-46957]: https://mellium.im/cve/cve-2024-46957/
+
+### Added
+
+- file: new implementation of [XEP-0446: File Metadata Element]
 - stream: add handling of `see-other-host` error
+
+[XEP-0446: File Metadata Element]: https://xmpp.org/extensions/xep-0446.html
 
 ### Breaking
 
+- receipts: the API for requesting read receipts has been simplified
 - stream: `Error.InnerXML()` has been replaced by `Error.Content`
+- pubsub: changed condition names to better reflect their type
 
 ### Fixed
 
+- dial: fix errors dialing connections without implicit TLS
+- dial: TLS dialers now respect timeouts on context
 - muc: fix a goroutine leak when joining or leaving a room and respect the
        context timeout when leaving the room
 - stanza: when marshaling an error, all translations are now included
 - stanza: when unmarshaling an error, the condition is now unmarshaled even if
           there are unknown child elements in the stanza
+- stream: whitespace is now allowed around stream start elements during session
+          negotiation
+- stream: fix broken error unmarshaling
 
 
 ## v0.21.4 — 2023-01-11

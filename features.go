@@ -12,6 +12,7 @@ import (
 	"io"
 
 	"mellium.im/xmlstream"
+	"mellium.im/xmpp/internal/decl"
 	"mellium.im/xmpp/internal/ns"
 	intstream "mellium.im/xmpp/internal/stream"
 	"mellium.im/xmpp/stream"
@@ -192,7 +193,7 @@ func negotiateFeatures(ctx context.Context, s *Session, first, ws bool, features
 			var iqStart xml.StartElement
 			if isIQ(start.Name) {
 				iqStart = start
-				t, err = s.in.d.Token()
+				t, err = decl.TrimLeftSpace(s.in.d).Token()
 				if err != nil {
 					return mask, nil, err
 				}
@@ -217,13 +218,13 @@ func negotiateFeatures(ctx context.Context, s *Session, first, ws bool, features
 			if iqStart.Name.Local == "" {
 				s.in.d = xmlstream.MultiReader(
 					xmlstream.Token(start),
-					intstream.Reader(oldDecoder),
+					intstream.Reader(oldDecoder, ws),
 				)
 			} else {
 				s.in.d = xmlstream.MultiReader(
 					xmlstream.Token(iqStart),
 					xmlstream.Token(start),
-					intstream.Reader(oldDecoder),
+					intstream.Reader(oldDecoder, ws),
 				)
 			}
 		} else {
@@ -260,7 +261,7 @@ func negotiateFeatures(ctx context.Context, s *Session, first, ws bool, features
 			if data.feature.Name.Local == "" {
 				return Ready, nil, nil
 			}
-			s.in.d = intstream.Reader(oldDecoder)
+			s.in.d = intstream.Reader(oldDecoder, ws)
 		}
 
 		mask, rw, err = data.feature.Negotiate(ctx, s, s.features[data.feature.Name.Space])
