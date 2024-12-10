@@ -129,6 +129,13 @@ var bindTestCases = [...]xmpptest.FeatureTestCase{
 		Out:        `<iq xmlns="jabber:server" type="result" id="123"><bind xmlns="urn:ietf:params:xml:ns:xmpp-bind"><jid>test@example.net/empty</jid></bind></iq>`,
 		FinalState: xmpp.Ready,
 	},
+	// Bind client tests
+	6: {
+		Feature:    xmpp.BindResource(),
+		Out:        `<iq xmlns="jabber:client" type="set" id="someId"><bind xmlns="urn:ietf:params:xml:ns:xmpp-bind"><resource>test_resource</resource></bind></iq>`,
+		In:         `<iq id='someId' type='result'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><jid>test@example.net/test_resource</jid></bind></iq>`,
+		FinalState: xmpp.Ready,
+	},
 }
 
 func TestBind(t *testing.T) {

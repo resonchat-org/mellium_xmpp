@@ -62,7 +62,7 @@ func NewServerSession(finalState xmpp.SessionState, rw io.ReadWriter) *xmpp.Sess
 
 func newSession(finalState xmpp.SessionState, rw io.ReadWriter, streamNS string) *xmpp.Session {
 	location := jid.MustParse("example.net")
-	origin := jid.MustParse("test@example.net")
+	origin := jid.MustParse("test@example.net/test_resource")
 
 	to, from := origin, location
 	if finalState&xmpp.Received == xmpp.Received {
