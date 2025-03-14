@@ -21,8 +21,9 @@
 // It is normally registered with a multiplexer such as the one found in the mux
 // package:
 //
-//	mucClient := muc.Client{}
+//	mucClient := &muc.Client{}
 //	m := mux.New(
+//	    "jabber:client",
 //	    muc.HandleClient(mucClient),
 //	)
 //	channel, err := mucClient.Join(…)
