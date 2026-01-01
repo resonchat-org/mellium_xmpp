@@ -31,10 +31,10 @@
 // disabled entirely by creating and configuring a [Dialer].
 // If SRV lookup is disabled or no SRV records are found the [Dialer] will
 // instead lookup A or AAAA records for the specified hostname or XMPP address
-// domainpart and attempt to connect on two default ports:
+// domainpart and attempt to connect on the following default ports:
 //
-//   - 5223 for implicit TLS (sometimes called "direct TLS") connections
-//   - 5222 for plain or opportunistic TLS (STARTTLS) connections
+//   - 5222 (c2s)/5269 (s2s) for plain or opportunistic TLS (STARTTLS) connections
+//   - 5223 (c2s)/5270 (s2s) for implicit TLS (sometimes called "direct TLS") connections
 //
 // Services that set SRV records and explicitly do not provide implicit TLS
 // should indicate this using an xmpps record that points to "." to disable
@@ -45,11 +45,8 @@
 // If service discovery returns any XMPP endpoints that provide implicit TLS
 // (ie. performing a TLS handshake immediately after dialing the transport layer
 // connection), these ports are tried first for safety reasons.
-// If the server does not support implicit TLS and no timeout is configured the
-// connection may take longer than anticipated, or hang entirely.
-// This is especially true for servers using the default ports described above.
-// This behavior can be disabled entirely on the [Dialer] (eg. for servers that
-// we know only support STARTTLS).
+// This however does not apply to the fallback endpoints where the standardized
+// non-TLS ones are prioritized over the conventional TLS ones.
 //
 // # Timeouts
 //
@@ -167,6 +164,11 @@ func (d *Dialer) DialServer(ctx context.Context, network string, addr jid.JID, s
 	return d.dial(ctx, network, addr, server)
 }
 
+type connectionCandidate struct {
+	tls bool
+	srv *net.SRV
+}
+
 func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server string) (net.Conn, error) {
 	cfg := d.TLSConfig
 	if cfg == nil {
@@ -210,21 +212,42 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 	}()
 	wg.Wait()
 
-	// Set a fallback if either record set was not present.
-	if !d.NoTLS && !xmppsNotPresent && len(xmppsAddrs) == 0 {
-		xmppsAddrs = discover.FallbackRecords(xmppsService, server)
+	var addrs []connectionCandidate
+	for _, srv := range xmppsAddrs {
+		addrs = append(addrs, connectionCandidate{
+			tls: true,
+			srv: srv,
+		})
 	}
+	for _, srv := range xmppAddrs {
+		addrs = append(addrs, connectionCandidate{
+			srv: srv,
+		})
+	}
+
+	// Set a fallback if either record set was not present. Prioritize
+	// STARTTLS fallbacks as we are instructed to try those by the RFC,
+	// whereas the TLS ports are only a convention.
 	if !xmppNotPresent && len(xmppAddrs) == 0 {
-		xmppAddrs = discover.FallbackRecords(xmppService, server)
+		for _, srv := range discover.FallbackRecords(xmppService, server) {
+			addrs = append(addrs, connectionCandidate{
+				srv: srv,
+			})
+		}
+	}
+	if !d.NoTLS && !xmppsNotPresent && len(xmppsAddrs) == 0 {
+		for _, srv := range discover.FallbackRecords(xmppsService, server) {
+			addrs = append(addrs, connectionCandidate{
+				tls: true,
+				srv: srv,
+			})
+		}
 	}
 
 	// If both lookups failed, return the errors.
 	if xmppsErr != nil && xmppErr != nil {
 		return nil, errors.Join(xmppsErr, xmppErr)
 	}
-	addrs := make([]*net.SRV, 0, len(xmppAddrs)+len(xmppsAddrs))
-	addrs = append(addrs, xmppsAddrs...)
-	addrs = append(addrs, xmppAddrs...)
 	if len(addrs) == 0 {
 		return nil, fmt.Errorf("no xmpp service found at address %s", server)
 	}
@@ -232,15 +255,15 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 	// Try dialing all of the SRV records we know about, breaking as soon as the
 	// connection is established.
 	var err error
-	for i, addr := range addrs {
+	for _, addr := range addrs {
 		var c net.Conn
 		var e error
-		// Do not dial expecting a TLS connection if we're trying addreses that we
-		// expect starttls on or if we have implicit TLS disabled.
-		if d.NoTLS || i >= len(xmppsAddrs) {
+		// Do not dial expecting a TLS connection if we're trying
+		// addresses that we expect starttls on.
+		if !addr.tls {
 			c, e = d.Dialer.DialContext(ctx, network, net.JoinHostPort(
-				addr.Target,
-				strconv.FormatUint(uint64(addr.Port), 10),
+				addr.srv.Target,
+				strconv.FormatUint(uint64(addr.srv.Port), 10),
 			))
 		} else {
 			tlsDialer := &tls.Dialer{
@@ -248,8 +271,8 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 				Config:    cfg,
 			}
 			c, e = tlsDialer.DialContext(ctx, network, net.JoinHostPort(
-				addr.Target,
-				strconv.FormatUint(uint64(addr.Port), 10),
+				addr.srv.Target,
+				strconv.FormatUint(uint64(addr.srv.Port), 10),
 			))
 		}
 		if e != nil {
@@ -263,19 +286,15 @@ func (d *Dialer) dial(ctx context.Context, network string, addr jid.JID, server 
 }
 
 func (d *Dialer) legacy(ctx context.Context, network string, domain string, cfg *tls.Config) (net.Conn, error) {
-	if !d.NoTLS {
-		tlsDialer := &tls.Dialer{
-			NetDialer: &d.Dialer,
-			Config:    cfg,
-		}
-		conn, err := tlsDialer.DialContext(ctx, network,
-			net.JoinHostPort(domain, "5223"))
-		if err == nil {
-			return conn, nil
-		}
+	conn, err := d.Dialer.DialContext(ctx, network, net.JoinHostPort(domain, "5222"))
+	if err == nil || d.NoTLS {
+		return conn, err
 	}
-
-	return d.Dialer.DialContext(ctx, network, net.JoinHostPort(domain, "5222"))
+	tlsDialer := &tls.Dialer{
+		NetDialer: &d.Dialer,
+		Config:    cfg,
+	}
+	return tlsDialer.DialContext(ctx, network, net.JoinHostPort(domain, "5223"))
 }
 
 func connType(useTLS, s2s bool) string {
