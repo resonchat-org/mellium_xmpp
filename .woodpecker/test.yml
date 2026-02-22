@@ -1,6 +1,6 @@
 steps:
   info: &info
-    image: golang:1.22-alpine
+    image: golang:1.25-alpine
     environment:
       CGO_ENABLED: "1"
     commands:
