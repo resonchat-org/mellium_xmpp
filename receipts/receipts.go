@@ -4,7 +4,7 @@
 
 //go:generate go run ../internal/genfeature -receiver "h *Handler"
 
-// Package receipts implements XEP-0184: Message Delivery Receipts.
+// Package receipts implements message delivery reciepts.
 package receipts // import "mellium.im/xmpp/receipts"
 
 import (
@@ -28,7 +28,7 @@ const (
 )
 
 // Requested is a type that can be added to messages to enable or disable
-// requesting a read receipt.
+// requesting a delivery receipt.
 //
 // This type is used to manually include a request in a message struct.
 // To send a message and wait for the receipt see the methods on Handler.
