@@ -15,10 +15,11 @@ import (
 
 // Channel represents a single chat room with various properties.
 type Channel struct {
-	JID        jid.JID
-	Autojoin   bool
-	Name       string
-	Nick       string
+	JID      jid.JID
+	Autojoin bool
+	Name     string
+	Nick     string
+	/* #nosec */
 	Password   string
 	Extensions []byte
 }
@@ -85,11 +86,12 @@ func (c Channel) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 // UnmarshalXML implements xml.Unmarshaler.
 func (c *Channel) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	data := struct {
-		XMLName    xml.Name `xml:"urn:xmpp:bookmarks:1 conference"`
-		Name       string   `xml:"name,attr"`
-		Autojoin   bool     `xml:"autojoin,attr"`
-		Nick       string   `xml:"nick"`
-		Password   string   `xml:"password"`
+		XMLName  xml.Name `xml:"urn:xmpp:bookmarks:1 conference"`
+		Name     string   `xml:"name,attr"`
+		Autojoin bool     `xml:"autojoin,attr"`
+		Nick     string   `xml:"nick"`
+		/* #nosec */
+		Password   string `xml:"password"`
 		Extensions struct {
 			Val []byte `xml:",innerxml"`
 		} `xml:"extensions"`

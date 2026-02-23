@@ -31,7 +31,7 @@ var (
 // Config contains options that can be written to the config file.
 type Config struct {
 	JID      jid.JID
-	Password string
+	Password string /* #nosec */
 	Port     string
 	Imports  [][]string
 	Args     []string

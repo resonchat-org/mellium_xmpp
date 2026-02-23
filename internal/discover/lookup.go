@@ -185,6 +185,7 @@ func getHostMetaXML(ctx context.Context, client *http.Client, name string) (xrd 
 	if client == nil {
 		client = http.DefaultClient
 	}
+	/* #nosec G704 name is tainted, but that's the whole point. */
 	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
 		return xrd, err

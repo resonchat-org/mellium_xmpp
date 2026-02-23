@@ -214,7 +214,7 @@ func Component(domain, secret, name string, modules ...string) integration.Optio
 		if cfg.Component == nil {
 			cfg.Component = make(map[string]struct {
 				Name        string
-				Secret      string
+				Secret      string /* #nosec */
 				Modules     []string
 				MUCDefaults []ChannelConfig
 			})

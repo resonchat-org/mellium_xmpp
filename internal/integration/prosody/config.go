@@ -24,7 +24,8 @@ type Config struct {
 	VHosts    []string
 	Options   map[string]interface{}
 	Component map[string]struct {
-		Name        string
+		Name string
+		/* #nosec */
 		Secret      string
 		Modules     []string
 		MUCDefaults []ChannelConfig
@@ -43,13 +44,14 @@ type ChannelConfig struct {
 	ChangeSubject      bool
 	HistoryLen         int
 	Lang               string
-	Pass               string
-	Logging            bool
-	MembersOnly        bool
-	Moderated          bool
-	Persistent         bool
-	Public             bool
-	PublicJIDs         bool
+	/* #nosec */
+	Pass        string
+	Logging     bool
+	MembersOnly bool
+	Moderated   bool
+	Persistent  bool
+	Public      bool
+	PublicJIDs  bool
 }
 
 var (

@@ -14,7 +14,7 @@ import (
 type Config struct {
 	JID       jid.JID
 	Port      string
-	Password  string
+	Password  string /* #nosec */
 	Component string
 }
 

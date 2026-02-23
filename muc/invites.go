@@ -62,6 +62,7 @@ type Invitation struct {
 	XMLName  xml.Name
 	Continue bool
 	JID      jid.JID
+	/* #nosec */
 	Password string
 	Reason   string
 	Thread   string
@@ -184,9 +185,10 @@ func (i *Invitation) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error 
 			XMLName  xml.Name `xml:"jabber:x:conference x"`
 			Continue bool     `xml:"continue,attr"`
 			JID      jid.JID  `xml:"jid,attr"`
-			Pass     string   `xml:"password,attr"`
-			Reason   string   `xml:"reason,attr"`
-			Thread   string   `xml:"thread,attr"`
+			/* #nosec */
+			Pass   string `xml:"password,attr"`
+			Reason string `xml:"reason,attr"`
+			Thread string `xml:"thread,attr"`
 		}{}
 		err := d.DecodeElement(&s, &start)
 		if err != nil {
@@ -211,6 +213,7 @@ func (i *Invitation) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error 
 				Thread  string `xml:"thread,attr"`
 			} `xml:"continue"`
 		} `xml:"invite"`
+		/* #nosec */
 		Pass string `xml:"password"`
 	}{}
 	err := d.DecodeElement(&s, &start)

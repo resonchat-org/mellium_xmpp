@@ -14,7 +14,8 @@ import (
 
 // Config contains options that can be written to the config file.
 type Config struct {
-	JID      jid.JID
+	JID jid.JID
+	/* #nosec */
 	Password string
 	FIFO     *os.File
 	Port     string
