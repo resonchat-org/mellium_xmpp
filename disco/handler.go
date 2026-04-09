@@ -6,6 +6,8 @@ package disco
 
 import (
 	"encoding/xml"
+	"hash"
+	"strings"
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp/disco/info"
@@ -19,8 +21,17 @@ import (
 // discovery requests by iterating over its own handlers and checking if they
 // implement info.FeatureIter, info.IdentityIter, form.Iter, or items.Iter.
 func Handle() mux.Option {
+	return HandleWithURI("", nil)
+}
+
+// HandleWithURI is like Handle only it handles incoming disco#info queries
+// directed at the entity capabilities node for an application with the
+// specified URI as if they had no node attribute at all. A hash algorithm to
+// be used for the calculation of the capabilities verification string must
+// also be specified.
+func HandleWithURI(uri string, algorithm hash.Hash) mux.Option {
 	return func(m *mux.ServeMux) {
-		h := &discoHandler{ServeMux: m}
+		h := &discoHandler{ServeMux: m, uri: uri, hash: algorithm}
 		mux.IQ(stanza.GetIQ, xml.Name{Space: NSInfo, Local: "query"}, h)(m)
 		mux.IQ(stanza.GetIQ, xml.Name{Space: NSItems, Local: "query"}, h)(m)
 	}
@@ -28,6 +39,8 @@ func Handle() mux.Option {
 
 type discoHandler struct {
 	ServeMux *mux.ServeMux
+	uri      string
+	hash     hash.Hash
 }
 
 func (h *discoHandler) HandleXMPP(t xmlstream.TokenReadEncoder, start *xml.StartElement) error {
@@ -42,6 +55,46 @@ func (h *discoHandler) HandleIQ(iq stanza.IQ, r xmlstream.TokenReadEncoder, star
 		if attr.Name.Local == "node" {
 			node = attr.Value
 			break
+		}
+	}
+
+	// For incoming disco#info queries sent in response to an outgoing
+	// entity capabilities hash verify that the node corresponds to this
+	// entity and if it does, query the handlers for an empty node instead.
+	if start.Name.Space == NSInfo && h.uri != "" && strings.HasPrefix(node, h.uri+"#") {
+		var discoInfo Info
+		if err := h.ServeMux.ForFeatures("", func(f info.Feature) error {
+			if _, ok := seen[f.Var]; ok {
+				return nil
+			}
+			seen[f.Var] = struct{}{}
+			discoInfo.Features = append(discoInfo.Features, f)
+			return nil
+		}); err != nil {
+			return err
+		}
+		seen = make(map[string]struct{})
+		if err := h.ServeMux.ForIdentities("", func(i info.Identity) error {
+			key := i.Category + ":" + i.Type + ":" + i.Name + ":" + i.Lang
+			if _, ok := seen[key]; ok {
+				return nil
+			}
+			seen[key] = struct{}{}
+			discoInfo.Identity = append(discoInfo.Identity, i)
+			return nil
+		}); err != nil {
+			return err
+		}
+		seen = make(map[string]struct{})
+		if err := h.ServeMux.ForForms("", func(d *form.Data) error {
+			discoInfo.Form = append(discoInfo.Form, *d)
+			return nil
+		}); err != nil {
+			return err
+		}
+		ver := discoInfo.Hash(h.hash)
+		if node == h.uri+"#"+ver {
+			node = ""
 		}
 	}
 
