@@ -37,8 +37,7 @@ class Daemon(xmpptest.Daemon):
         tlsCtx = self.client.get_ssl_context()
         tlsCtx.check_hostname=False
         tlsCtx.verify_mode=ssl.CERT_NONE
-        self.client.connect(address=("127.0.0.1", self.xmpp_port),
-                            force_starttls=False)
+        self.client.connect(host="127.0.0.1", port=self.xmpp_port)
         await self.client.wait_until('session_end')
 
     async def run(self) -> None:
