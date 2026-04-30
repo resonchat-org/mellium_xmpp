@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Security
+
+- roster: ignore roster pushes from unauthorized entities
+
 ### Breaking
 
 - styling: individual tokens no longer contains their own Style, use Decoder's

@@ -32,12 +32,23 @@ func Handle(h Handler) mux.Option {
 // Handler responds to roster pushes.
 // If Push returns a stanza.Error it is sent as an error response to the IQ
 // push, otherwise it is passed through and returned from HandleIQ.
+// Roster pushes not originating from the account's bare JID are ignored.
 type Handler struct {
 	Push func(ver string, item Item) error
 }
 
 // HandleIQ responds to roster push IQs.
 func (h Handler) HandleIQ(iq stanza.IQ, t xmlstream.TokenReadEncoder, start *xml.StartElement) error {
+	if !iq.From.Equal(jid.JID{}) {
+		// Ignore the IQ if it doesn't originate from the account's
+		// bare JID to prevent unauthorized roster pushes. RFC 6121
+		// allows rosters to be managed by an external entity, but the
+		// current API doesn't allow the caller to verify whether the
+		// sender is authorized as it doesn't pass the value of the
+		// from attribute of the IQ to Push. For more details, refer to
+		// section 2.1.6 of the RFC.
+		return nil
+	}
 	item := Item{}
 	err := xml.NewTokenDecoder(t).Decode(&item)
 	if err != nil {

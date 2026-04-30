@@ -214,6 +214,37 @@ func TestReceivePushError(t *testing.T) {
 	}
 }
 
+func TestIgnoreUnauthorizedPush(t *testing.T) {
+	var called bool
+	h := roster.Handler{
+		Push: func(ver string, item roster.Item) error {
+			called = true
+			return nil
+		},
+	}
+
+	m := mux.New(stanza.NSClient, roster.Handle(h))
+	wait := make(chan struct{})
+	s := xmpptest.NewClientServer(
+		xmpptest.ClientHandler(xmpptest.NotifyingHandler{
+			C:     wait,
+			Inner: m,
+		}),
+		xmpptest.ClientJID(jid.MustParse(`romeo@montague.example`)),
+	)
+	defer s.Close()
+	const msg = `<iq xmlns='jabber:client' id='a78b4q6ha463' from='tybalt@capulet.example/home' to='romeo@montague.example/garden' type='set'><query xmlns='jabber:iq:roster'><item jid='juliet@capulet.example' subscription='remove'/></query></iq>`
+	d := xml.NewDecoder(strings.NewReader(msg))
+	if err := s.Server.Send(context.Background(), d); err != nil {
+		t.Fatalf("failed to send roster push: %v", err)
+	}
+
+	<-wait
+	if called {
+		t.Error("roster push handler invoked for a spoofed message")
+	}
+}
+
 type errReadWriter struct{}
 
 func (errReadWriter) Write([]byte) (int, error) {
