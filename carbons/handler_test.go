@@ -12,6 +12,7 @@ import (
 
 	"mellium.im/xmpp/carbons"
 	"mellium.im/xmpp/internal/xmpptest"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
@@ -35,7 +36,10 @@ func TestHandler(t *testing.T) {
 		},
 	}
 	m := mux.New(stanza.NSClient, carbons.Handle(h))
-	s := xmpptest.NewClientServer(xmpptest.ClientHandler(m))
+	s := xmpptest.NewClientServer(
+		xmpptest.ClientHandler(m),
+		xmpptest.ClientJID(jid.MustParse(`romeo@montague.example`)),
+	)
 	defer s.Close()
 	const recv = `<message xmlns='jabber:client'
          from='romeo@montague.example'
@@ -47,4 +51,40 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("error sending carbon: %v", err)
 	}
 	<-wait
+}
+
+func TestSpoofedMessage(t *testing.T) {
+	var called bool
+	h := carbons.Handler{
+		F: func(m stanza.Message, sent bool, inner xml.TokenReader) error {
+			called = true
+			return nil
+		},
+	}
+	m := mux.New(stanza.NSClient, carbons.Handle(h))
+	wait := make(chan struct{})
+	s := xmpptest.NewClientServer(
+		xmpptest.ClientHandler(xmpptest.NotifyingHandler{
+			C:     wait,
+			Inner: m,
+		}),
+		xmpptest.ClientJID(jid.MustParse(`romeo@montague.example`)),
+	)
+	defer s.Close()
+	const msg = `<message xmlns='jabber:client'
+			 from='tybalt@capulet.example/home'
+			 to='romeo@montague.example'
+			 type='chat'><received xmlns='urn:xmpp:carbons:2'><forwarded xmlns='urn:xmpp:forward:0'><message xmlns='jabber:client'
+			       from='juliet@capulet.example/balcony'
+			       to='romeo@montague.example/garden'
+			       type='chat'><body>Thou shall meet me tonite, at our house's hall!</body></message></forwarded></received></message>`
+	d := xml.NewDecoder(strings.NewReader(msg))
+	if err := s.Server.Send(context.Background(), d); err != nil {
+		t.Fatalf("failed to send carbons message: %v", err)
+	}
+
+	<-wait
+	if called {
+		t.Error("carbons handler invoked for a spoofed message")
+	}
 }

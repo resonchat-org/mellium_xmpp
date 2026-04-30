@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 
 	"mellium.im/xmlstream"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
@@ -26,7 +27,8 @@ func Handle(h Handler) mux.Option {
 	}
 }
 
-// Handler can be used to handle incoming carbon copied messages.
+// Handler can be used to handle incoming carbon copied messages. Messages not
+// originating from the account's bare JID are ignored.
 type Handler struct {
 	F func(m stanza.Message, sent bool, inner xml.TokenReader) error
 }
@@ -35,6 +37,10 @@ type Handler struct {
 // it is used by the multiplexer and normally does not need to be called by the
 // user.
 func (h Handler) HandleMessage(p stanza.Message, r xmlstream.TokenReadEncoder) error {
+	if !p.From.Equal(jid.JID{}) {
+		// Ignore spoofed messages.
+		return nil
+	}
 	// Pop the message start.
 	_, err := r.Token()
 	if err != nil {

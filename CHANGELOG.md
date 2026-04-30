@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Security
 
 - roster: ignore roster pushes from unauthorized entities
+- carbons: ignore spoofed messages
 
 ### Breaking
 
