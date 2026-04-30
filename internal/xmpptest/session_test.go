@@ -13,13 +13,14 @@ import (
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/internal/xmpptest"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/stanza"
 )
 
 func TestNewSession(t *testing.T) {
 	state := xmpp.Secure | xmpp.InputStreamClosed
 	buf := new(bytes.Buffer)
-	s := xmpptest.NewClientSession(state, buf)
+	s := xmpptest.NewClientSession(state, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), buf)
 
 	if mask := s.State(); mask != state|xmpp.Ready {
 		t.Errorf("Got invalid state value: want=%d, got=%d", state, mask)

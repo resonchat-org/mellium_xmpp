@@ -15,6 +15,7 @@ import (
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp/internal/xmpptest"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/receipts"
 	"mellium.im/xmpp/stanza"
@@ -125,7 +126,7 @@ func TestClosedDoesNotPanic(t *testing.T) {
 	h := &receipts.Handler{}
 
 	bw := &bytes.Buffer{}
-	s := xmpptest.NewClientSession(0, bw)
+	s := xmpptest.NewClientSession(0, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), bw)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := h.SendMessageElement(ctx, s, nil, stanza.Message{
@@ -166,7 +167,7 @@ func TestRoundTrip(t *testing.T) {
 	h := &receipts.Handler{}
 
 	var req bytes.Buffer
-	s := xmpptest.NewClientSession(0, &req)
+	s := xmpptest.NewClientSession(0, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), &req)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -225,7 +225,7 @@ func (errReadWriter) Read([]byte) (int, error) {
 }
 
 func TestErroredDoesNotPanic(t *testing.T) {
-	s := xmpptest.NewClientSession(0, errReadWriter{})
+	s := xmpptest.NewClientSession(0, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), errReadWriter{})
 	iter := roster.Fetch(context.Background(), s)
 	if iter.Next() {
 		t.Errorf("expected false from call to next")

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"mellium.im/xmpp"
+	"mellium.im/xmpp/jid"
 )
 
 type testWriter struct {
@@ -66,7 +67,7 @@ func RunFeatureTests(t *testing.T, tcs []FeatureTestCase) {
 			}
 
 			buf.Reset()
-			s := NewClientSession(tc.State, struct {
+			s := NewClientSession(tc.State, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), struct {
 				io.Reader
 				io.Writer
 			}{

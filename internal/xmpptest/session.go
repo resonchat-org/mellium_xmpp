@@ -22,7 +22,7 @@ import (
 // pops the first token (likely <stream:stream>) but does not perform any
 // validation on the token, transmit any data over the wire, or perform any
 // other session negotiation.
-func NopNegotiator(state xmpp.SessionState, streamNS string) xmpp.Negotiator {
+func NopNegotiator(state xmpp.SessionState, origin, location jid.JID, streamNS string) xmpp.Negotiator {
 	return func(ctx context.Context, in, out *stream.Info, s *xmpp.Session, data interface{}) (xmpp.SessionState, io.ReadWriter, interface{}, error) {
 		// Pop the stream start token.
 		rc := s.TokenReader()
@@ -38,32 +38,29 @@ func NopNegotiator(state xmpp.SessionState, streamNS string) xmpp.Negotiator {
 			io.Writer
 		}{
 			Writer: io.Discard,
-		}, out, false, stream.DefaultVersion, "", "example.net", "test@example.net", "123")
+		}, out, false, stream.DefaultVersion, "", location.String(), origin.String(), "123")
 
 		return state | xmpp.Ready, nil, nil, err
 	}
 }
 
 // NewClientSession returns a new client-to-client XMPP session with the state
-// bits set to finalState|xmpp.Ready, the origin JID set to "test@example.net"
-// and the location JID set to "example.net".
+// bits set to finalState|xmpp.Ready and the origin and location JIDs set to
+// the provided values.
 //
 // NewClientSession panics on error for ease of use in testing, where a panic is
 // acceptable.
-func NewClientSession(finalState xmpp.SessionState, rw io.ReadWriter) *xmpp.Session {
-	return newSession(finalState, rw, stanza.NSClient)
+func NewClientSession(finalState xmpp.SessionState, origin, location jid.JID, rw io.ReadWriter) *xmpp.Session {
+	return newSession(finalState, origin, location, rw, stanza.NSClient)
 }
 
 // NewServerSession is like NewClientSession except that the stream uses the
 // server-to-server namespace.
-func NewServerSession(finalState xmpp.SessionState, rw io.ReadWriter) *xmpp.Session {
-	return newSession(finalState, rw, stanza.NSServer)
+func NewServerSession(finalState xmpp.SessionState, origin, location jid.JID, rw io.ReadWriter) *xmpp.Session {
+	return newSession(finalState, origin, location, rw, stanza.NSServer)
 }
 
-func newSession(finalState xmpp.SessionState, rw io.ReadWriter, streamNS string) *xmpp.Session {
-	location := jid.MustParse("example.net")
-	origin := jid.MustParse("test@example.net")
-
+func newSession(finalState xmpp.SessionState, origin, location jid.JID, rw io.ReadWriter, streamNS string) *xmpp.Session {
 	to, from := origin, location
 	if finalState&xmpp.Received == xmpp.Received {
 		to, from = from, to
@@ -83,7 +80,7 @@ func newSession(finalState xmpp.SessionState, rw io.ReadWriter, streamNS string)
 			Writer: rw,
 		},
 		0,
-		NopNegotiator(finalState, streamNS),
+		NopNegotiator(finalState, origin, location, streamNS),
 	)
 	if err != nil {
 		panic(err)
@@ -134,6 +131,20 @@ func ServerHandlerFunc(handler xmpp.HandlerFunc) Option {
 	return ServerHandler(handler)
 }
 
+// ClientJID sets the client JID.
+func ClientJID(j jid.JID) Option {
+	return func(c *ClientServer) {
+		c.clientJid = j
+	}
+}
+
+// ServerJID sets the server JID.
+func ServerJID(j jid.JID) Option {
+	return func(c *ClientServer) {
+		c.serverJid = j
+	}
+}
+
 // ClientServer is two coupled xmpp.Session's that can respond to one another in
 // tests.
 type ClientServer struct {
@@ -144,6 +155,9 @@ type ClientServer struct {
 	serverHandler xmpp.Handler
 	clientState   xmpp.SessionState
 	serverState   xmpp.SessionState
+
+	clientJid jid.JID
+	serverJid jid.JID
 }
 
 // NewClientServer returns a ClientServer with the client and server goroutines
@@ -153,14 +167,16 @@ type ClientServer struct {
 func NewClientServer(opts ...Option) *ClientServer {
 	cs := &ClientServer{
 		serverState: xmpp.Received,
+		clientJid:   jid.MustParse("test@example.net"),
+		serverJid:   jid.MustParse("example.net"),
 	}
 	for _, opt := range opts {
 		opt(cs)
 	}
 
 	clientConn, serverConn := net.Pipe()
-	cs.Client = NewClientSession(cs.clientState, clientConn)
-	cs.Server = NewServerSession(cs.serverState, serverConn)
+	cs.Client = NewClientSession(cs.clientState, cs.clientJid, cs.serverJid, clientConn)
+	cs.Server = NewServerSession(cs.serverState, cs.clientJid, cs.serverJid, serverConn)
 	/* #nosec */
 	go cs.Client.Serve(cs.clientHandler)
 	/* #nosec */

@@ -19,6 +19,7 @@ import (
 	"mellium.im/xmpp/disco/items"
 	"mellium.im/xmpp/internal/marshal"
 	"mellium.im/xmpp/internal/xmpptest"
+	"mellium.im/xmpp/jid"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
@@ -608,7 +609,7 @@ func TestFallback(t *testing.T) {
 				Reader: strings.NewReader(tc.in),
 				Writer: buf,
 			}
-			s := xmpptest.NewClientSession(0, rw)
+			s := xmpptest.NewClientSession(0, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), rw)
 
 			r := s.TokenReader()
 			defer r.Close()

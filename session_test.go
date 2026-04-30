@@ -33,7 +33,7 @@ func TestClosedInputStream(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			mask := xmpp.SessionState(i)
 			buf := new(bytes.Buffer)
-			s := xmpptest.NewClientSession(mask, buf)
+			s := xmpptest.NewClientSession(mask, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), buf)
 			r := s.TokenReader()
 			defer r.Close()
 
@@ -53,7 +53,7 @@ func TestClosedOutputStream(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			mask := xmpp.SessionState(i)
 			buf := new(bytes.Buffer)
-			s := xmpptest.NewClientSession(mask, buf)
+			s := xmpptest.NewClientSession(mask, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), buf)
 			w := s.TokenWriter()
 			defer w.Close()
 
@@ -373,7 +373,7 @@ func TestServe(t *testing.T) {
 			in := strings.NewReader(tc.in)
 			var s *xmpp.Session
 			if tc.serverNS {
-				s = xmpptest.NewServerSession(tc.state, struct {
+				s = xmpptest.NewServerSession(tc.state, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), struct {
 					io.Reader
 					io.Writer
 				}{
@@ -381,7 +381,7 @@ func TestServe(t *testing.T) {
 					Writer: out,
 				})
 			} else {
-				s = xmpptest.NewClientSession(tc.state, struct {
+				s = xmpptest.NewClientSession(tc.state, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), struct {
 					io.Reader
 					io.Writer
 				}{

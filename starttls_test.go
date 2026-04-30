@@ -17,6 +17,7 @@ import (
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/internal/ns"
 	"mellium.im/xmpp/internal/xmpptest"
+	"mellium.im/xmpp/jid"
 )
 
 // There is no room for variation on the starttls feature negotiation, so step
@@ -123,7 +124,7 @@ func (nopRWC) Close() error {
 func TestNegotiateServer(t *testing.T) {
 	stls := xmpp.StartTLS(&tls.Config{})
 	var b bytes.Buffer
-	c := xmpptest.NewClientSession(xmpp.Received, nopRWC{&b, &b})
+	c := xmpptest.NewClientSession(xmpp.Received, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), nopRWC{&b, &b})
 	_, rw, err := stls.Negotiate(context.Background(), c, nil)
 	switch {
 	case err != nil:
@@ -162,7 +163,7 @@ func TestNegotiateClient(t *testing.T) {
 			stls := xmpp.StartTLS(&tls.Config{})
 			r := strings.NewReader(strings.Join(test.responses, "\n"))
 			var b bytes.Buffer
-			c := xmpptest.NewClientSession(0, nopRWC{r, &b})
+			c := xmpptest.NewClientSession(0, jid.MustParse(`test@example.net`), jid.MustParse(`example.net`), nopRWC{r, &b})
 			mask, rw, err := stls.Negotiate(context.Background(), c, nil)
 			switch {
 			case test.err && err == nil:
