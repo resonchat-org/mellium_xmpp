@@ -28,6 +28,11 @@ All notable changes to this project will be documented in this file.
 - dial: respect "service not supported" SRV records and do not attempt to dial
   fallback records if the server has indicated that they do not support a
   specific service.
+- disco: implement HandleWithURI
+
+### Changed
+
+- dial: prioritize SRV-defined endpoints and non-TLS fallbacks
 
 
 ## v0.22.0 — 2024-09-23
