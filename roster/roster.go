@@ -9,7 +9,9 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"strconv"
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
@@ -249,7 +251,60 @@ type Item struct {
 	JID          jid.JID  `xml:"jid,attr,omitempty"`
 	Name         string   `xml:"name,attr,omitempty"`
 	Subscription string   `xml:"subscription,attr,omitempty"`
+	Ask          bool     `xml:"-"`
+	Approved     bool     `xml:"approved,attr,omitempty"`
 	Group        []string `xml:"group,omitempty"`
+}
+
+// UnmarshalXML implements [encoding.xml/Unmarshaler].
+func (item *Item) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "jid":
+			j, err := jid.Parse(attr.Value)
+			if err != nil {
+				return fmt.Errorf("failed to parse the jid attribute: %w", err)
+			}
+			item.JID = j
+		case "name":
+			item.Name = attr.Value
+		case "subscription":
+			item.Subscription = attr.Value
+		case "ask":
+			item.Ask = attr.Value == "subscribe"
+		case "approved":
+			approved, err := strconv.ParseBool(attr.Value)
+			if err != nil {
+				return fmt.Errorf("failed to parse the approved attribute: %w", err)
+			}
+			item.Approved = approved
+		}
+	}
+	iter := xmlstream.NewIter(d)
+	for iter.Next() {
+		start, payload := iter.Current()
+		if start == nil || start.Name.Local != "group" {
+			continue
+		}
+		token, err := payload.Token()
+		if err != nil {
+			iter.Close() // #nosec G104
+			return err
+		}
+		group, ok := token.(xml.CharData)
+		if !ok {
+			iter.Close() // #nosec G104
+			return fmt.Errorf("expected xml.CharData, got %T", token)
+		}
+		item.Group = append(item.Group, string(group))
+	}
+	if err := iter.Close(); err != nil {
+		return fmt.Errorf("failed to close the iterator: %w", err)
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("error occurred while iterating payload: %w", err)
+	}
+	return nil
 }
 
 // TokenReader satisfies the xmlstream.Marshaler interface.
@@ -273,6 +328,12 @@ func (item Item) TokenReader() xml.TokenReader {
 	}
 	if item.Subscription != "" {
 		attrs = append(attrs, xml.Attr{Name: xml.Name{Local: "subscription"}, Value: item.Subscription})
+	}
+	if item.Ask {
+		attrs = append(attrs, xml.Attr{Name: xml.Name{Local: "ask"}, Value: "subscribe"})
+	}
+	if item.Approved {
+		attrs = append(attrs, xml.Attr{Name: xml.Name{Local: "approved"}, Value: "true"})
 	}
 
 	return xmlstream.Wrap(

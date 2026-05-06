@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+## Added
+
+- roster: support the 'ask' and 'approved' attributes
+
 ## v0.23.0 — 2026-05-04
 
 ### Security
