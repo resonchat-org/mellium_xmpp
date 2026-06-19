@@ -11,6 +11,7 @@ import (
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
+	"mellium.im/xmpp/internal/attr"
 	"mellium.im/xmpp/paging"
 	"mellium.im/xmpp/stanza"
 )
@@ -99,8 +100,7 @@ func FetchIQ(ctx context.Context, iq stanza.IQ, s *xmpp.Session, q Query) *Iter 
 	}
 
 	return &Iter{
-		iter: paging.WrapIter(xmlstream.NewIter(resp), 0),
-		err:  err,
+		iter: paging.NewIter(resp, 0),
 	}
 }
 
@@ -124,14 +124,8 @@ func (i *Iter) Next() bool {
 	if start == nil {
 		return i.Next()
 	}
-	i.currID = ""
 	i.current = xmlstream.Inner(r)
-	for _, attr := range start.Attr {
-		if attr.Name.Local == "id" {
-			i.currID = attr.Value
-			break
-		}
-	}
+	_, i.currID = attr.Get(start.Attr, "id")
 	return true
 }
 
