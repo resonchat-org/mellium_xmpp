@@ -18,6 +18,7 @@ import (
 	"mellium.im/xmpp/disco/info"
 	"mellium.im/xmpp/form"
 	"mellium.im/xmpp/jid"
+	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
 )
 
@@ -180,4 +181,39 @@ func GetInfoIQ(ctx context.Context, node string, iq stanza.IQ, s *xmpp.Session) 
 	var info Info
 	err := s.UnmarshalIQElement(ctx, query.TokenReader(), iq, &info)
 	return info, err
+}
+
+// CollectInfo returns disco info of the provided mux for the given node.
+func CollectInfo(m *mux.ServeMux, node string) (*Info, error) {
+	var ret Info
+	seen := make(map[string]struct{})
+	if err := m.ForFeatures(node, func(f info.Feature) error {
+		if _, ok := seen[f.Var]; ok {
+			return nil
+		}
+		seen[f.Var] = struct{}{}
+		ret.Features = append(ret.Features, f)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	clear(seen)
+	if err := m.ForIdentities(node, func(i info.Identity) error {
+		key := i.Category + ":" + i.Type + ":" + i.Name + ":" + i.Lang
+		if _, ok := seen[key]; ok {
+			return nil
+		}
+		seen[key] = struct{}{}
+		ret.Identity = append(ret.Identity, i)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := m.ForForms(node, func(d *form.Data) error {
+		ret.Form = append(ret.Form, *d)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return &ret, nil
 }

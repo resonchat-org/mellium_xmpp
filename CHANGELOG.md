@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## Added
 
 - roster: support the 'ask' and 'approved' attributes
+- disco: the CollectInfo function
 
 ## v0.23.0 — 2026-05-04
 

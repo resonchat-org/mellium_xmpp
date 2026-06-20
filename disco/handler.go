@@ -62,34 +62,8 @@ func (h *discoHandler) HandleIQ(iq stanza.IQ, r xmlstream.TokenReadEncoder, star
 	// entity capabilities hash verify that the node corresponds to this
 	// entity and if it does, query the handlers for an empty node instead.
 	if start.Name.Space == NSInfo && h.uri != "" && strings.HasPrefix(node, h.uri+"#") {
-		var discoInfo Info
-		if err := h.ServeMux.ForFeatures("", func(f info.Feature) error {
-			if _, ok := seen[f.Var]; ok {
-				return nil
-			}
-			seen[f.Var] = struct{}{}
-			discoInfo.Features = append(discoInfo.Features, f)
-			return nil
-		}); err != nil {
-			return err
-		}
-		seen = make(map[string]struct{})
-		if err := h.ServeMux.ForIdentities("", func(i info.Identity) error {
-			key := i.Category + ":" + i.Type + ":" + i.Name + ":" + i.Lang
-			if _, ok := seen[key]; ok {
-				return nil
-			}
-			seen[key] = struct{}{}
-			discoInfo.Identity = append(discoInfo.Identity, i)
-			return nil
-		}); err != nil {
-			return err
-		}
-		seen = make(map[string]struct{})
-		if err := h.ServeMux.ForForms("", func(d *form.Data) error {
-			discoInfo.Form = append(discoInfo.Form, *d)
-			return nil
-		}); err != nil {
+		discoInfo, err := CollectInfo(h.ServeMux, "")
+		if err != nil {
 			return err
 		}
 		ver := discoInfo.Hash(h.hash)
