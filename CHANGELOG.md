@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - roster: support the 'ask' and 'approved' attributes
 - disco: the CollectInfo function
+- pubsub: facilities for handling incoming event notifications
 
 ## v0.23.0 — 2026-05-04
 
