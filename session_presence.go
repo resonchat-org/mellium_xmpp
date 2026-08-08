@@ -38,7 +38,7 @@ func (s *Session) SendPresence(ctx context.Context, r xml.TokenReader) (xmlstrea
 	}
 	start, ok := tok.(xml.StartElement)
 	if !ok {
-		return nil, fmt.Errorf("expected IQ start element, got %T", tok)
+		return nil, fmt.Errorf("expected presence start element, got %T", tok)
 	}
 	if !isPresenceEmptySpace(start.Name) {
 		return nil, fmt.Errorf("expected start element to be a presence")
