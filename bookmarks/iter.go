@@ -53,6 +53,7 @@ func (i *Iter) Next() bool {
 	}
 	j, err := jid.Parse(id)
 	if err != nil {
+		i.err = err
 		return false
 	}
 	i.current = bookmark
