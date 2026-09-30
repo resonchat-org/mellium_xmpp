@@ -7,7 +7,7 @@ clone:
 
 steps:
   info: &info
-    image: golang:alpine
+    image: golang:1.26-alpine
     environment:
       GO111MODULE: "on"
       CGO_ENABLED: "0"

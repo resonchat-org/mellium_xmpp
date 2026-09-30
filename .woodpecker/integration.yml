@@ -4,7 +4,7 @@
 
 steps:
   info: &info
-    image: alpine:edge
+    image: golang:1.26-alpine
     environment:
       CGO_ENABLED: "0"
       MELLIUM_INTEGRATION_SKIP: "ejabberdctl,sendxmpp,mcabber,jackal"
