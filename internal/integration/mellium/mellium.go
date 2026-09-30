@@ -136,7 +136,6 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			logger.Fatalf("error opening s2s listener: %v", err)
 		}
-		fdNum++
 		wg.Add(1)
 		go func() {
 			listen(true, s2sListener, logger, cfg)
