@@ -52,6 +52,16 @@ func integrationFetch(ctx context.Context, t *testing.T, cmd *integration.Cmd) {
 			t.Logf("error from serve: %v", err)
 		}
 	}()
+	iter := bookmarks.Fetch(ctx, session)
+	if iter.Next() {
+		t.Fatal("unexpected bookmarks received")
+	}
+	if err := iter.Err(); err != nil {
+		t.Fatalf("received error while fetching empty bookmarks: %v", err)
+	}
+	if err := iter.Close(); err != nil {
+		t.Fatalf("failed to close the iterator: %v", err)
+	}
 	err = bookmarks.Publish(ctx, session, bookmarks.Channel{
 		JID:      j,
 		Name:     "The Bookmark",
@@ -60,7 +70,7 @@ func integrationFetch(ctx context.Context, t *testing.T, cmd *integration.Cmd) {
 	if err != nil {
 		t.Fatalf("error publishing bookmark: %v", err)
 	}
-	iter := bookmarks.Fetch(ctx, session)
+	iter = bookmarks.Fetch(ctx, session)
 	hasNext := iter.Next()
 	if !hasNext {
 		t.Fatalf("did not find any bookmarks")

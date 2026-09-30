@@ -7,6 +7,7 @@ package bookmarks
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/jid"
@@ -67,7 +68,10 @@ func (i *Iter) Err() error {
 		return i.err
 	}
 
-	return i.iter.Err()
+	if err := i.iter.Err(); !errors.Is(err, stanza.Error{Condition: stanza.ItemNotFound}) {
+		return err
+	}
+	return nil
 }
 
 // Bookmark returns the last bookmark parsed by the iterator.
