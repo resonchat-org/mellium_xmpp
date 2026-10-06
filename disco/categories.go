@@ -45,6 +45,10 @@ var (
 	// Type: A server component that authenticates against a Radius system
 	AuthRadius = info.Identity{Category: "auth", Type: "radius"}
 
+	// Category: Services and nodes that provide authorization identities.
+	// Type: An authorization service that provides ephemeral identities.
+	AuthzEphemeral = info.Identity{Category: "authz", Type: "ephemeral"}
+
 	// Category: The "automation" category consists of entities and nodes that provide automated or programmed interaction.
 	// Type: The node for a list of commands; valid only for the node "http://jabber.org/protocol/commands"
 	AutomationCommandList = info.Identity{Category: "automation", Type: "command-list"}
@@ -92,6 +96,10 @@ var (
 	// Category: The "client" category consists of different types of clients, mostly for instant messaging.
 	// Type: A client that is not actually using an instant messaging client; however, messages sent to this contact will be delivered as Short Message Service (SMS) messages
 	ClientSMS = info.Identity{Category: "client", Type: "sms"}
+
+	// Category: The "client" category consists of different types of clients, mostly for instant messaging.
+	// Type: A client running on a touchscreen device larger than a smartphone and without a physical keyboard permanently attached to it.
+	ClientTablet = info.Identity{Category: "client", Type: "tablet"}
 
 	// Category: The "client" category consists of different types of clients, mostly for instant messaging.
 	// Type: A client operated from within a web browser
@@ -170,6 +178,10 @@ var (
 	GatewayAIM = info.Identity{Category: "gateway", Type: "aim"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to the Discord IM service
+	GatewayDiscord = info.Identity{Category: "gateway", Type: "discord"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to the Facebook IM service
 	GatewayFacebook = info.Identity{Category: "gateway", Type: "facebook"}
 
@@ -194,6 +206,10 @@ var (
 	GatewayLCS = info.Identity{Category: "gateway", Type: "lcs"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to a mattermost instance IM service
+	GatewayMattermost = info.Identity{Category: "gateway", Type: "mattermost"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to the mail.ru IM service
 	GatewayMRIM = info.Identity{Category: "gateway", Type: "mrim"}
 
@@ -210,12 +226,20 @@ var (
 	GatewayOCS = info.Identity{Category: "gateway", Type: "ocs"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to the Public Switched Telephone Network (PSTN)
+	GatewayPstn = info.Identity{Category: "gateway", Type: "pstn"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to the QQ IM service
 	GatewayQQ = info.Identity{Category: "gateway", Type: "qq"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to IBM Lotus Sametime
 	GatewaySametime = info.Identity{Category: "gateway", Type: "sametime"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to Signal IM service
+	GatewaySignal = info.Identity{Category: "gateway", Type: "signal"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to SIP for Instant Messaging and Presence Leveraging Extensions (SIMPLE)
@@ -232,6 +256,14 @@ var (
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to the SMTP (email) network
 	GatewaySMTP = info.Identity{Category: "gateway", Type: "smtp"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to Steam IM service
+	GatewaySteam = info.Identity{Category: "gateway", Type: "steam"}
+
+	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
+	// Type: Gateway to the Telegram IM service
+	GatewayTelegram = info.Identity{Category: "gateway", Type: "telegram"}
 
 	// Category: The "gateway" category consists of translators between Jabber/XMPP services and non-XMPP services.
 	// Type: Gateway to the Tlen IM service
