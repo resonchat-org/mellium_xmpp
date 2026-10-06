@@ -18,18 +18,23 @@ import (
 // HandleCaps calls f for each incoming presence containing entity capabilities
 // information.
 func HandleCaps(f func(stanza.Presence, Caps)) mux.Option {
-	return mux.PresenceFunc("", xml.Name{Space: NSCaps, Local: "c"}, func(p stanza.Presence, r xmlstream.TokenReadEncoder) error {
-		s := struct {
-			stanza.Presence
-			Caps Caps
-		}{}
-		err := xml.NewTokenDecoder(r).Decode(&s)
-		if err != nil {
-			return err
-		}
-		f(p, s.Caps)
-		return nil
-	})
+	return mux.Presence("", xml.Name{Space: NSCaps, Local: "c"}, capsHandler(f))
+}
+
+type capsHandler func(stanza.Presence, Caps)
+
+// HandlePresence implements [mellium.im/xmpp/mux.PresenceHandler].
+func (f capsHandler) HandlePresence(p stanza.Presence, r xmlstream.TokenReadEncoder) error {
+	s := struct {
+		stanza.Presence
+		Caps Caps
+	}{}
+	err := xml.NewTokenDecoder(r).Decode(&s)
+	if err != nil {
+		return err
+	}
+	f(p, s.Caps)
+	return nil
 }
 
 // StreamFeature is an informational stream feature that saves any entity caps

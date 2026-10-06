@@ -4,6 +4,7 @@
 
 //go:generate go run gen.go
 //go:generate go run ../internal/genfeature -filename features.go -receiver "h *discoHandler" -vars Feature:NSInfo
+//go:generate go run ../internal/genfeature -filename caps_features.go -receiver capsHandler -vars FeatureCaps:NSCaps
 
 // Package disco implements service discovery.
 package disco // import "mellium.im/xmpp/disco"
