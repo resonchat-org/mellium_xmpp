@@ -2,7 +2,7 @@
 // Use of this source code is governed by the BSD 2-clause
 // license that can be found in the LICENSE file.
 
-//go:generate go run ../internal/genfeature
+//go:generate go run ../internal/genfeature -receiver handler
 
 // Package version queries a remote entity for software version info.
 package version // import "mellium.im/xmpp/version"
