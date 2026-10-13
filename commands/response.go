@@ -61,10 +61,9 @@ func (r Response) Prev() Command {
 	}
 }
 
-// TokenReader satisfies the xmlstream.Marshaler interface.
-func (r Response) TokenReader() xml.TokenReader {
-	return r.IQ.Wrap(xmlstream.Wrap(
-		nil,
+func (r Response) wrapWithoutIQ(t xml.TokenReader) xml.TokenReader {
+	return xmlstream.Wrap(
+		t,
 		xml.StartElement{
 			Name: xml.Name{Space: NS, Local: "command"},
 			Attr: []xml.Attr{
@@ -73,7 +72,12 @@ func (r Response) TokenReader() xml.TokenReader {
 				{Name: xml.Name{Local: "status"}, Value: r.Status},
 			},
 		},
-	))
+	)
+}
+
+// TokenReader satisfies the xmlstream.Marshaler interface.
+func (r Response) TokenReader() xml.TokenReader {
+	return r.IQ.Wrap(r.wrapWithoutIQ(nil))
 }
 
 // WriteXML satisfies the xmlstream.WriterTo interface.
