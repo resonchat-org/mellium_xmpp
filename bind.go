@@ -75,9 +75,7 @@ type bindPayload struct {
 func (bp bindPayload) TokenReader() xml.TokenReader {
 	if bp.Resource != "" {
 		return xmlstream.Wrap(
-			xmlstream.ReaderFunc(func() (xml.Token, error) {
-				return xml.CharData(bp.JID.String()), io.EOF
-			}),
+			xmlstream.Token(xml.CharData(bp.Resource)),
 			xml.StartElement{Name: xml.Name{Local: "resource"}},
 		)
 	}
