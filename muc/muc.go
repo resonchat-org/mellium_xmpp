@@ -134,6 +134,32 @@ type Client struct {
 	// HandleInvite will be called if we receive a mediated MUC invitation.
 	HandleInvite       func(Invitation)
 	HandleUserPresence func(stanza.Presence, Item)
+	// HandleUserUnpresence is called when another occupant leaves (or is
+	// removed from) a managed room. It is not called for our own departure.
+	HandleUserUnpresence func(stanza.Presence, Item)
+}
+
+// GetManagedChannel returns the channel for a room (bare or full room JID).
+func (c *Client) GetManagedChannel(room jid.JID) (*Channel, bool) {
+	c.managedM.Lock()
+	defer c.managedM.Unlock()
+	return c.channelLocked(room)
+}
+
+func (c *Client) channelLocked(room jid.JID) (*Channel, bool) {
+	if ch, ok := c.managed[room.String()]; ok {
+		return ch, true
+	}
+	bare := room.Bare().String()
+	if ch, ok := c.managed[bare]; ok {
+		return ch, true
+	}
+	for _, ch := range c.managed {
+		if ch.addr.Bare().Equal(room.Bare()) {
+			return ch, true
+		}
+	}
+	return nil, false
 }
 
 // HandleMessage satisfies mux.MessageHandler.
@@ -181,12 +207,9 @@ func (p *mucPresence) HasStatus(code int) bool {
 // it is used by the multiplexer and normally does not need to be called by the
 // user.
 func (c *Client) HandlePresence(p stanza.Presence, r xmlstream.TokenReadEncoder) error {
-	// If this is a self-presence, check if we're joining or departing and send on
-	// the channel.
 	c.managedM.Lock()
 	defer c.managedM.Unlock()
-	channel, ok := c.managed[p.From.String()]
-	// TODO: what do we do with presences that aren't managed?
+	channel, ok := c.channelLocked(p.From)
 	if !ok {
 		return nil
 	}
@@ -197,32 +220,38 @@ func (c *Client) HandlePresence(p stanza.Presence, r xmlstream.TokenReadEncoder)
 		return err
 	}
 
+	self := p.From.Equal(channel.addr) || decodedPresence.HasStatus(110)
+
 	switch p.Type {
 	case stanza.AvailablePresence:
-		// If any join functions are pending awaiting the join to complete, unblock
-		// them.
-	selectJoin:
-		select {
-		case c := <-channel.join:
+		if self {
+		selectJoin:
 			select {
-			case c.j <- p.From:
-				return nil
-			case <-c.done:
-				// If the call to Join has timed out, try again to see if we have a
-				// subsequent call to Join (and if not, send the call to the user
-				// presence handler for the user to take care of).
-				goto selectJoin
+			case jc := <-channel.join:
+				select {
+				case jc.j <- p.From:
+					// Fall through so occupant callbacks still see self if desired.
+				case <-jc.done:
+					goto selectJoin
+				}
+			default:
 			}
-		default:
 		}
 		if decodedPresence.X.XMLName.Space == NSUser && c.HandleUserPresence != nil {
 			c.HandleUserPresence(decodedPresence.Presence, decodedPresence.X.Item)
 		}
 	case stanza.UnavailablePresence:
-		delete(c.managed, channel.addr.String())
-		select {
-		case channel.depart <- struct{}{}:
-		default:
+		if self {
+			delete(c.managed, channel.addr.String())
+			delete(c.managed, channel.addr.Bare().String())
+			select {
+			case channel.depart <- struct{}{}:
+			default:
+			}
+			return nil
+		}
+		if decodedPresence.X.XMLName.Space == NSUser && c.HandleUserUnpresence != nil {
+			c.HandleUserUnpresence(decodedPresence.Presence, decodedPresence.X.Item)
 		}
 	}
 	return nil
@@ -255,7 +284,9 @@ func (c *Client) JoinPresence(ctx context.Context, p stanza.Presence, s *xmpp.Se
 	if c.managed == nil {
 		c.managed = make(map[string]*Channel)
 	}
+	// Index by both full room/nick (self) and bare room for occupant lookup.
 	c.managed[p.To.String()] = channel
+	c.managed[p.To.Bare().String()] = channel
 	c.managedM.Unlock()
 
 	err := channel.JoinPresence(ctx, p, opt...)

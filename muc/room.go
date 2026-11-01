@@ -7,6 +7,7 @@ package muc
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp"
@@ -147,6 +148,9 @@ func (c *Channel) Invite(ctx context.Context, reason string, to jid.JID) error {
 
 // SetAffiliation changes the affiliation of the provided JID which should be
 // the users real bare-JID (not their room JID).
+//
+// Conversations MultiUserChatManager.setAffiliation uses the same muc#admin
+// IQ (affiliation + jid). Ban/outcast is AffiliationOutcast.
 func (c *Channel) SetAffiliation(ctx context.Context, a Affiliation, j jid.JID, nick, reason string) error {
 	var reasonEl xml.TokenReader
 	if reason != "" {
@@ -161,6 +165,40 @@ func (c *Channel) SetAffiliation(ctx context.Context, a Affiliation, j jid.JID, 
 	}
 	if nick != "" {
 		attr = append(attr, xml.Attr{Name: xml.Name{Local: "nick"}, Value: nick})
+	}
+	payload := xmlstream.Wrap(
+		xmlstream.Wrap(
+			reasonEl,
+			xml.StartElement{
+				Name: xml.Name{Local: "item"},
+				Attr: attr,
+			},
+		),
+		xml.StartElement{Name: xml.Name{Space: NSAdmin, Local: "query"}},
+	)
+	return c.session.UnmarshalIQElement(ctx, payload, stanza.IQ{
+		Type: stanza.SetIQ,
+		To:   c.addr.Bare(),
+	}, nil)
+}
+
+// SetRole changes an occupant's role by nick (Conversations
+// MultiUserChatManager.setRole). Used for mute (RoleVisitor) / unmute
+// (RoleParticipant); it does not change affiliation.
+func (c *Channel) SetRole(ctx context.Context, role Role, nick, reason string) error {
+	if nick == "" {
+		return fmt.Errorf("muc: SetRole requires nick")
+	}
+	var reasonEl xml.TokenReader
+	if reason != "" {
+		reasonEl = xmlstream.Wrap(
+			xmlstream.Token(xml.CharData(reason)),
+			xml.StartElement{Name: xml.Name{Local: "reason"}},
+		)
+	}
+	attr := []xml.Attr{
+		{Name: xml.Name{Local: "role"}, Value: role.String()},
+		{Name: xml.Name{Local: "nick"}, Value: nick},
 	}
 	payload := xmlstream.Wrap(
 		xmlstream.Wrap(
